@@ -203,7 +203,11 @@ async function handleFoodApi(request, env) {
 
 /* ========== 账本：自动迁移 / 表结构保障 ========== */
 
+let ledgerSchemaReady = false;
+
 async function ensureLedgerSchema(env) {
+  if (ledgerSchemaReady) return;
+
   await env.MY_DB.prepare(
     `CREATE TABLE IF NOT EXISTS ledger_transactions (
       tx_id TEXT PRIMARY KEY,
@@ -245,6 +249,8 @@ async function ensureLedgerSchema(env) {
       "ALTER TABLE ledger_transactions ADD COLUMN is_deleted INTEGER DEFAULT 0"
     ).run();
   }
+
+  ledgerSchemaReady = true;
 }
 
 /* ========== 账本 API：D1 操作 ========== */
@@ -413,17 +419,20 @@ async function handleExportCsv(env) {
     "tx_id,date,amount,category_level1,category_level2,description,account,book,is_xiaoe\n";
 
   for (const r of rows) {
-    csv += [
-      r.tx_id,
-      r.date,
-      r.amount,
-      r.category_level1,
-      r.category_level2,
-      r.description,
-      r.account,
-      r.book,
-      r.is_xiaoe ? "是" : "否",
-    ].join(",") + "\n";
+    csv +=
+      [
+        r.tx_id,
+        r.date,
+        r.amount,
+        r.category_level1,
+        r.category_level2,
+        r.description,
+        r.account,
+        r.book,
+        r.is_xiaoe ? "是" : "否",
+      ]
+        .map(escapeCsvValue)
+        .join(",") + "\n";
   }
 
   return new Response(csv, {
@@ -434,4 +443,12 @@ async function handleExportCsv(env) {
       ...corsHeaders(),
     },
   });
+}
+
+function escapeCsvValue(value) {
+  const str = String(value ?? "");
+  if (str.includes(",") || str.includes("\n") || str.includes('"')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
 }
