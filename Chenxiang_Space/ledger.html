@@ -453,12 +453,12 @@
           <input
             type="text"
             id="inCat2"
-            placeholder="二级分类 (如: 烟草/饮料)"
+            placeholder="二级分类 (如: 饮料/交通)"
             list="cat2List"
           />
           <datalist id="cat2List">
             <option value="餐饮"></option>
-            <option value="烟草"></option>
+            <option value="烟草" style="display: none"></option>
             <option value="饮料"></option>
             <option value="交通"></option>
             <option value="停车"></option>
@@ -1183,11 +1183,24 @@
       drawCharts(bData, theme === "light");
 
       const showB = document.getElementById("chkBscope").checked;
-      const listData = showB ? bData : periodTx;
-      renderList(listData);
+      const incomeTx = periodTx.filter((tx) => tx.category_level1 === "收入");
+      const listData = showB
+        ? bData.concat(incomeTx)
+        : periodTx.slice();
+
+      const sortedList = listData.slice().sort((a, b) => {
+        if (a.date === b.date) {
+          const aId = a.tx_id || "";
+          const bId = b.tx_id || "";
+          return aId > bId ? -1 : aId < bId ? 1 : 0;
+        }
+        return a.date > b.date ? -1 : 1;
+      });
+
+      renderList(sortedList);
     }
 
-    /* ========== 分类逻辑：车 / 娱乐 / 缴费 / 饮食 / 烟草 / 饮料 / 其他 ========== */
+    /* ========== 分类逻辑：车 / 娱乐 / 缴费 / 饮食 / 饮料 / 其他 ========== */
 // 统一的消费分类，用于饼图 & 重点指标
 function classifyCategory(tx) {
   const c1 = tx.category_level1 || "";
@@ -1208,11 +1221,6 @@ function classifyCategory(tx) {
   // ⚡ 生活缴费
   if (/水费|电费|燃气|煤气|宽带|网费|话费|流量|固话/.test(text)) {
     return "util";
-  }
-
-  // 🚬 烟草
-  if (/烟|香烟|卷烟|利群|中华|芙蓉王/.test(text)) {
-    return "smoke";
   }
 
   // 🧃 饮料 / 奶茶
@@ -1252,15 +1260,7 @@ function classifyCategory(tx) {
 
     function renderKeyMetrics(bData) {
       const total = sumAmount(bData);
-      const keys = [
-        "car",
-        "ent",
-        "util",
-        "food",
-        "smoke",
-        "drink",
-        "other",
-      ];
+      const keys = ["car", "ent", "util", "food", "drink", "other"];
       const buckets = {};
       keys.forEach((k) => {
         buckets[k] = { amt: 0, cnt: 0 };
@@ -1289,7 +1289,7 @@ function classifyCategory(tx) {
       setMetric("util", "valUtilAmt", "valUtilMeta");
       setMetric("food", "valFoodAmt", "valFoodMeta");
 
-      // 饼图：车 / 娱乐 / 缴费 / 饮食 / 烟草 / 饮料 / 其他
+      // 饼图：车 / 娱乐 / 缴费 / 饮食 / 饮料 / 其他
       const pieDiv = document.getElementById("pieChart");
       const pieDetail = document.getElementById("pieDetail");
 
@@ -1305,7 +1305,6 @@ function classifyCategory(tx) {
         { key: "ent", label: "娱乐" },
         { key: "util", label: "生活缴费" },
         { key: "food", label: "饮食" },
-        { key: "smoke", label: "烟草" },
         { key: "drink", label: "饮料/奶茶" },
         { key: "other", label: "其他" },
       ];
@@ -1362,7 +1361,6 @@ function classifyCategory(tx) {
         娱乐: "ent",
         生活缴费: "util",
         饮食: "food",
-        烟草: "smoke",
         "饮料/奶茶": "drink",
         其他: "other",
       };
@@ -1509,7 +1507,7 @@ function classifyCategory(tx) {
       } else if (delta < -5) {
         c = `你领先时间 ${Math.abs(
           delta
-        )}%，花得挺克制，可以考虑给自己一点小奖励（但别是烟）。`;
+        )}%，花得挺克制，可以考虑给自己一点小奖励。`;
       } else if (Math.abs(delta) <= 5) {
         c = "节奏刚刚好，消费基本跟时间同步，保持这个状态就很舒服。";
       } else {
