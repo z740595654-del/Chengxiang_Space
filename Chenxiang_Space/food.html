@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>⚡️ 干饭大转盘</title>
+    <style>
+        /* ================= 视觉风格：Z世代新粗野主义 ================= */
+        :root {
+            --bg-color: #f0f0f0;
+            --card-bg: #ffffff;
+            --main-accent: #8854d0;
+            --second-accent: #20bf6b;
+            --hot-pink: #fc5c65;
+            --yellow: #fed330;
+            --border-color: #000000;
+            --border-width: 3px;
+            --shadow-offset: 5px;
+        }
+
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(#000 1px, transparent 1px);
+            background-size: 20px 20px;
+            margin: 0;
+            padding: 10px;
+            color: var(--border-color);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* 返回主页按钮 */
+        .home-btn {
+            position: fixed;
+            top: 10px; left: 10px;
+            background: #fff; border: 3px solid #000; border-radius: 50%;
+            width: 40px; height: 40px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.2rem; cursor: pointer; z-index: 100;
+            box-shadow: 3px 3px 0 #000; text-decoration: none; color: #000;
+        }
+        .home-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #000; }
+
+        .neo-box {
+            background: var(--card-bg);
+            border: var(--border-width) solid var(--border-color);
+            box-shadow: var(--shadow-offset) var(--shadow-offset) 0px var(--border-color);
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            background: var(--yellow);
+            display: inline-block;
+            padding: 5px 15px;
+            border: var(--border-width) solid var(--border-color);
+            box-shadow: 4px 4px 0px var(--border-color);
+            transform: rotate(-2deg);
+            font-weight: 900;
+            font-size: 1.5rem;
+            margin: 10px 0 20px;
+        }
+
+        button {
+            background: white;
+            border: var(--border-width) solid var(--border-color);
+            padding: 10px 15px;
+            font-weight: bold;
+            font-family: inherit;
+            box-shadow: 3px 3px 0px var(--border-color);
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0px var(--border-color); }
+        button:disabled { background: #ddd; color: #888; cursor: wait; transform: translate(2px,2px); box-shadow: 1px 1px 0 #000; }
+
+        input, textarea {
+            border: var(--border-width) solid var(--border-color);
+            padding: 10px;
+            font-family: inherit;
+            outline: none;
+            width: 100%;
+            box-sizing: border-box;
+            background: #fff;
+        }
+
+        .app-container { max-width: 450px; margin: 0 auto; text-align: center; margin-top: 40px; }
+        
+        .wheel-wrapper {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            margin: 0 auto 30px;
+        }
+        .wheel-border {
+            width: 100%; height: 100%;
+            border-radius: 50%;
+            border: var(--border-width) solid var(--border-color);
+            box-shadow: 8px 8px 0px var(--border-color);
+            overflow: hidden;
+            position: relative;
+            background: white;
+        }
+        canvas { width: 100%; height: 100%; display: block; }
+        .pointer {
+            position: absolute; top: -20px; left: 50%;
+            transform: translateX(-50%); z-index: 10;
+            font-size: 40px; filter: drop-shadow(2px 2px 0 #000);
+        }
+
+        .list-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 0; border-bottom: 2px dashed #ccc;
+            cursor: pointer; text-align: left;
+        }
+        .tag { font-size: 0.8rem; background: #eee; padding: 2px 6px; border-radius: 4px; margin-left:5px; }
+
+        .sync-area { background: #e3f2fd; }
+        #syncStatus { font-size: 0.8rem; margin-top: 8px; color: #666; min-height: 1.2em; transition: color 0.3s;}
+
+        .log-box {
+            font-size: 0.75rem; color: #666; text-align: left;
+            max-height: 120px; overflow-y: auto;
+            background: #fff; padding: 10px; border: 2px solid #000; margin-top: 10px;
+        }
+        .log-item { border-bottom: 1px solid #eee; padding: 2px 0; }
+        .log-item.highlight { color: var(--second-accent); font-weight: bold; background: #f0fff4; }
+
+        #detailPage, #settingsPage, #resultModal { display: none; }
+        .photo-slot {
+            aspect-ratio: 1; border: 2px dashed #000;
+            display: flex; justify-content: center; align-items: center;
+            background: #eee; overflow: hidden; position: relative;
+        }
+        .photo-slot img { width: 100%; height: 100%; object-fit: cover; }
+        .photos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8); display: none; z-index: 100;
+            justify-content: center; align-items: center;
+        }
+        .modal-box {
+            background: white; width: 80%; max-width: 300px;
+            padding: 30px; border: 4px solid black;
+            box-shadow: 10px 10px 0 white; text-align: center;
+        }
+        
+        .rating-stars span { font-size: 2rem; color: #ccc; cursor: pointer; }
+        .rating-stars span.active { color: var(--yellow); text-shadow: 2px 2px 0 #000; }
+    </style>
+</head>
+<body>
+
+<!-- 返回主页按钮 -->
+<a href="index.html" class="home-btn" title="返回主页">🏠</a>
+
+<div class="app-container">
+    
+    <!-- 首页 -->
+    <div id="homePage">
+        <div style="display:flex; justify-content:center; align-items:center;">
+            <h1>⚡️ 干饭大转盘</h1>
+            <button onclick="openSettings()" style="padding:5px 10px; font-size:0.8rem; position:absolute; right:10px;">⚙️ 设置</button>
+        </div>
+
+        <div class="wheel-wrapper">
+            <div class="pointer">👇</div>
+            <div class="wheel-border">
+                <canvas id="wheelCanvas" width="600" height="600"></canvas>
+            </div>
+        </div>
+
+        <div class="neo-box">
+            <button id="spinBtn" onclick="spin()" style="width:100%; background:var(--main-accent); color:white; font-size:1.2rem; margin-bottom:20px;">GO! 开始随机</button>
+            
+            <div style="display:flex; gap:8px; margin-bottom:15px;">
+                <input type="text" id="newName" placeholder="输入饭店名称..." onkeypress="handleEnter(event)">
+                <button id="addBtn" onclick="addNewItem()" style="background:var(--second-accent); color:white;">ADD</button>
+            </div>
+
+            <div id="listContainer"></div>
+        </div>
+
+        <!-- 云同步 -->
+        <div class="neo-box sync-area">
+            <button id="syncBtn" onclick="smartSync(true)" style="width:100%; background:#2196f3; color:white;">☁️ 强制刷新云端</button>
+            <div id="syncStatus">系统就绪</div>
+            <div class="log-box" id="logContainer">暂无日志</div>
+        </div>
+    </div>
+
+    <!-- 详情页 -->
+    <div id="detailPage" class="neo-box" style="text-align: left;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
+            <button onclick="goBack()">⬅ 返回</button>
+            <button onclick="deleteCurrentItem()" style="background:var(--hot-pink); color:white">删除</button>
+        </div>
+        <h2 id="detailName" style="margin:0; border-bottom:3px solid var(--yellow); display:inline-block;"></h2>
+        
+        <div style="margin-top:20px;">
+            评分: 
+            <div class="rating-stars" id="starRating" style="display:inline-block; vertical-align:middle;">
+                <span onclick="setRate(1)">★</span><span onclick="setRate(2)">★</span><span onclick="setRate(3)">★</span><span onclick="setRate(4)">★</span><span onclick="setRate(5)">★</span>
+            </div>
+        </div>
+        
+        <textarea id="detailNote" rows="3" style="margin-top:10px;" placeholder="这家店味道怎么样？"></textarea>
+        
+        <div style="margin-top:10px;">
+            <label>照片 (最多3张):</label>
+            <div class="photos-grid" id="photoGrid"></div>
+            <input type="file" id="imgInput" style="display:none" accept="image/*" onchange="handleImageUpload(this)">
+        </div>
+        
+        <button id="saveDetailBtn" onclick="saveDetail()" style="width:100%; margin-top:20px; background:var(--second-accent); color:white;">💾 保存并同步</button>
+    </div>
+
+    <!-- 设置页 -->
+    <div id="settingsPage" class="neo-box">
+        <h3>🛠️ 设置</h3>
+        <p>你的昵称:</p>
+        <input type="text" id="userNick">
+        <p style="font-size:0.8rem; color:#888; margin-top:20px;">
+            * 默认数据已重置，同步将不再冲突。<br>
+            * 每次操作后会自动上传。
+        </p>
+        <button onclick="saveSettings()" style="width:100%; margin-top:20px; background:var(--yellow);">保存设置</button>
+    </div>
+
+    <!-- 结果弹窗 -->
+    <div class="modal-overlay" id="resultModal">
+        <div class="modal-box">
+            <h3 style="color:#888;">✨ 命运决定 ✨</h3>
+            <h1 id="resultText" style="color:var(--main-accent); font-size:2rem; margin:20px 0;"></h1>
+            <button onclick="document.getElementById('resultModal').style.display='none'" style="width:100%; background:var(--yellow)">这就去吃！🏃</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ================= 配置区 =================
+    // 你的新域名
+    const WORKER_URL = "https://czbpght.cn"; 
+    const API_KEY = "finn_secret_2025"; 
+
+    // ================= 数据核心 =================
+    const DB_NAME = 'FoodWheel_Cloud_V7';
+    let db;
+    let localData = { items: [], logs: [] };
+    let currentUser = localStorage.getItem('food_user') || '操作员';
+    let isSyncing = false;
+
+    window.onload = function() {
+        document.getElementById('userNick').value = currentUser;
+        initDB();
+    };
+
+    function initDB() {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = (e) => {
+            db = e.target.result;
+            if(!db.objectStoreNames.contains('store')) db.createObjectStore('store', {keyPath: 'id'});
+        };
+        req.onsuccess = (e) => {
+            db = e.target.result;
+            loadFromDB();
+        };
+    }
+
+    function loadFromDB() {
+        const tx = db.transaction('store', 'readonly');
+        const req = tx.objectStore('store').get('main_data');
+        req.onsuccess = () => {
+            if(req.result) {
+                localData = req.result.data;
+            } else {
+                // 默认数据
+                localData = { items: [
+                    {id: 1, name:'小狗面馆', rating:0, note:'', photos:[], updatedAt: 0, isDeleted: false},
+                    {id: 2, name:'老奶奶面馆', rating:0, note:'', photos:[], updatedAt: 0, isDeleted: false},
+                    {id: 3, name:'小饮与食', rating:0, note:'', photos:[], updatedAt: 0, isDeleted: false},
+                    {id: 4, name:'小食札记', rating:0, note:'', photos:[], updatedAt: 0, isDeleted: false}
+                ], logs: [
+                    {time: Date.now(), text: `[系统] 初始化完成。`}
+                ] };
+                saveToDB();
+            }
+            renderUI();
+            // 自动拉取
+            smartSync(false); 
+        };
+    }
+
+    function saveToDB() {
+        const tx = db.transaction('store', 'readwrite');
+        tx.objectStore('store').put({id: 'main_data', data: localData});
+    }
+
+    // ================= 智能同步 (单用户版) =================
+    async function smartSync(isManual = false) {
+        if(isSyncing) return;
+        isSyncing = true;
+
+        const btn = document.getElementById('syncBtn');
+        const statusText = document.getElementById('syncStatus');
+        
+        if(isManual) {
+            btn.disabled = true;
+            btn.innerText = "⏳ 正在连接...";
+        }
+        statusText.innerText = "云端同步中...";
+        statusText.style.color = "#2196f3";
+
+        try {
+            // 注意：这里不需要传 userId 参数了，后端会自动默认为 1
+            const res = await fetch(WORKER_URL + "?t=" + Date.now(), {
+                method: 'GET',
+                headers: { 'X-Custom-Auth': API_KEY }
+            });
+            
+            if(res.status === 403) throw new Error("密码错误(API Key)");
+            if(!res.ok) throw new Error("网络错误 " + res.status);
+            
+            const cloudText = await res.text();
+            let cloudData = { items: [], logs: [] };
+            if(cloudText && cloudText !== "[]") cloudData = JSON.parse(cloudText);
+
+            // 合并逻辑
+            let mergedItems = [...localData.items];
+            const cloudMap = new Map(cloudData.items.map(i => [i.id, i]));
+            let updateCount = 0;
+
+            cloudMap.forEach((cItem, id) => {
+                const lItem = mergedItems.find(i => i.id === id);
+                if (!lItem) {
+                    mergedItems.push(cItem); // 新增
+                    updateCount++;
+                } else {
+                    // 只要云端新，就覆盖
+                    if (cItem.updatedAt > lItem.updatedAt) {
+                        Object.assign(lItem, cItem);
+                        updateCount++;
+                    }
+                }
+            });
+
+            // 日志合并
+            let allLogs = [...localData.logs, ...cloudData.logs];
+            const uniqueLogs = Array.from(new Set(allLogs.map(JSON.stringify))).map(JSON.parse);
+            uniqueLogs.sort((a,b) => b.time - a.time);
+            localData.logs = uniqueLogs.slice(0, 50);
+            localData.items = mergedItems;
+
+            if (updateCount > 0 && !isManual) {
+                addLog(`自动同步：更新了 ${updateCount} 条数据`, true);
+            }
+
+            // 上传
+            await fetch(WORKER_URL, {
+                method: 'PUT',
+                headers: { 'X-Custom-Auth': API_KEY },
+                body: JSON.stringify(localData)
+            });
+
+            saveToDB();
+            renderUI();
+            
+            statusText.innerText = "已同步 " + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            statusText.style.color = "#666";
+            if(isManual) alert(`✅ 刷新成功！\n云端更新了 ${updateCount} 条数据到本地。`);
+
+        } catch(e) {
+            console.error(e);
+            statusText.innerText = "同步失败 (请重试)";
+            statusText.style.color = "var(--hot-pink)";
+            if(isManual) alert("同步失败：" + e.message);
+        } finally {
+            isSyncing = false;
+            if(isManual) {
+                btn.disabled = false;
+                btn.innerText = "☁️ 强制刷新云端";
+            }
+        }
+    }
+
+    // ================= 业务逻辑 =================
+    function addLog(action, isSystemLog = false) {
+        const timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        const prefix = isSystemLog ? "[系统]" : currentUser;
+        const log = {
+            time: Date.now(),
+            text: `[${timeStr}] ${prefix} ${action}`,
+            isHighlight: isSystemLog
+        };
+        localData.logs.unshift(log);
+        if(localData.logs.length > 50) localData.logs.pop();
+    }
+
+    function renderUI() {
+        const list = document.getElementById('listContainer');
+        const logContainer = document.getElementById('logContainer');
+        list.innerHTML = '';
+        
+        const activeItems = localData.items.filter(i => !i.isDeleted);
+        activeItems.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'list-item';
+            div.onclick = () => openDetail(item.id);
+            div.innerHTML = `
+                <span>${item.name}</span>
+                <div>
+                    ${item.photos.length ? '<span class="tag">图</span>' : ''}
+                    ${item.rating>0 ? '<span class="tag">'+item.rating+'★</span>' : ''}
+                </div>
+            `;
+            list.appendChild(div);
+        });
+
+        logContainer.innerHTML = localData.logs.map(l => 
+            `<div class="log-item ${l.isHighlight?'highlight':''}">${l.text}</div>`
+        ).join('') || '暂无日志';
+        
+        drawWheel(activeItems);
+    }
+
+    async function addNewItem() {
+        const nameInput = document.getElementById('newName');
+        const name = nameInput.value.trim();
+        if(!name) return;
+        
+        const newItem = {
+            id: Date.now() + Math.random(),
+            name: name,
+            rating: 0, note: '', photos: [],
+            updatedAt: Date.now(),
+            isDeleted: false
+        };
+        localData.items.push(newItem);
+        addLog(`添加了 [${name}]`);
+        saveToDB();
+        renderUI();
+        nameInput.value = '';
+        await smartSync(false);
+    }
+    function handleEnter(e) { if(e.key === 'Enter') addNewItem(); }
+
+    async function deleteCurrentItem() {
+        if(!confirm("确定要删除吗？")) return;
+        const item = localData.items.find(i => i.id === currentId);
+        if(item) {
+            item.isDeleted = true;
+            item.updatedAt = Date.now();
+            item.photos = [];
+            addLog(`删除了 [${item.name}]`);
+            saveToDB();
+            goBack();
+            renderUI();
+            await smartSync(false);
+        }
+    }
+
+    let currentId = null;
+    function openDetail(id) {
+        currentId = id;
+        const item = localData.items.find(i => i.id === id);
+        document.getElementById('homePage').style.display = 'none';
+        document.getElementById('detailPage').style.display = 'block';
+        document.getElementById('detailName').innerText = item.name;
+        document.getElementById('detailNote').value = item.note;
+        renderStars(item.rating);
+        renderPhotos(item.photos);
+    }
+
+    async function saveDetail() {
+        const item = localData.items.find(i => i.id === currentId);
+        item.note = document.getElementById('detailNote').value;
+        item.updatedAt = Date.now();
+        addLog(`更新了 [${item.name}]`);
+        saveToDB();
+        await smartSync(false);
+        alert("保存并同步成功！");
+    }
+
+    function renderStars(r) {
+        const spans = document.querySelectorAll('#starRating span');
+        spans.forEach((s, i) => s.className = i < r ? 'active' : '');
+    }
+    function setRate(r) {
+        const item = localData.items.find(i => i.id === currentId);
+        item.rating = r;
+        item.updatedAt = Date.now();
+        saveToDB();
+        renderStars(r);
+    }
+
+    function renderPhotos(photos) {
+        const grid = document.getElementById('photoGrid');
+        grid.innerHTML = '';
+        photos.forEach((src, idx) => {
+            const div = document.createElement('div');
+            div.className = 'photo-slot';
+            div.innerHTML = `<img src="${src}">`;
+            div.onclick = async () => {
+                if(confirm("删除这张照片？")) {
+                    photos.splice(idx, 1);
+                    const item = localData.items.find(i => i.id === currentId);
+                    item.updatedAt = Date.now();
+                    saveToDB();
+                    renderPhotos(photos);
+                    await smartSync(false);
+                }
+            };
+            grid.appendChild(div);
+        });
+        if(photos.length < 3) {
+            const add = document.createElement('div');
+            add.className = 'photo-slot';
+            add.innerHTML = '+';
+            add.style.background = '#fff';
+            add.style.cursor = 'pointer';
+            add.style.fontSize = '2rem';
+            add.onclick = () => document.getElementById('imgInput').click();
+            grid.appendChild(add);
+        }
+    }
+
+    function handleImageUpload(input) {
+        if(input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                compressImage(e.target.result, async (res) => {
+                    const item = localData.items.find(i => i.id === currentId);
+                    item.photos.push(res);
+                    item.updatedAt = Date.now();
+                    saveToDB();
+                    renderPhotos(item.photos);
+                    await smartSync(false);
+                });
+            };
+            reader.readAsDataURL(input.files[0]);
+            input.value = '';
+        }
+    }
+
+    function compressImage(src, cb) {
+        const img = new Image();
+        img.src = src;
+        img.onload = () => {
+            const cvs = document.createElement('canvas');
+            const ctx = cvs.getContext('2d');
+            let w = img.width, h = img.height;
+            const max = 800;
+            if(w>max || h>max) { if(w>h){h*=max/w;w=max} else{w*=max/h;h=max} }
+            cvs.width=w; cvs.height=h;
+            ctx.drawImage(img,0,0,w,h);
+            cb(cvs.toDataURL('image/jpeg', 0.7));
+        }
+    }
+
+    function openSettings() {
+        document.getElementById('homePage').style.display = 'none';
+        document.getElementById('settingsPage').style.display = 'block';
+    }
+    
+    async function saveSettings() {
+        const nick = document.getElementById('userNick').value.trim();
+        if (nick) {
+            currentUser = nick;
+            localStorage.setItem('food_user', currentUser);
+            addLog("修改了昵称");
+            await smartSync(false);
+        }
+        goBack();
+    }
+    
+    function goBack() {
+        document.getElementById('detailPage').style.display = 'none';
+        document.getElementById('settingsPage').style.display = 'none';
+        document.getElementById('homePage').style.display = 'block';
+    }
+
+    // ================= 转盘绘制 =================
+    const canvas = document.getElementById('wheelCanvas');
+    const ctx = canvas.getContext('2d');
+    let isSpinning = false;
+    let currentDegree = 0;
+    const colors = ['#fc5c65', '#fd9644', '#fed330', '#26de81', '#2bcbba', '#45aaf2', '#4b7bec', '#a55eea'];
+
+    function drawWheel(items) {
+        const num = items.length;
+        const w = 600, c = 300;
+        ctx.clearRect(0,0,w,w);
+        if(num===0) return;
+        const arc = 2*Math.PI/num;
+        for(let i=0; i<num; i++) {
+            const angle = i*arc;
+            ctx.save(); ctx.translate(c,c);
+            ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,c,angle,angle+arc);
+            ctx.fillStyle = colors[i%colors.length]; ctx.fill();
+            ctx.lineWidth=4; ctx.strokeStyle="#000"; ctx.stroke();
+            
+            ctx.save(); ctx.rotate(angle+arc/2); ctx.textAlign="right"; 
+            ctx.fillStyle="#000"; ctx.font="bold 32px Courier New";
+            ctx.fillText(items[i].name, c-40, 12);
+            ctx.restore(); ctx.restore();
+        }
+    }
+
+    function spin() {
+        const items = localData.items.filter(i => !i.isDeleted);
+        if(isSpinning) return;
+        if(items.length < 2) return alert("至少需要2个选项！");
+        
+        isSpinning = true;
+        const spinBtn = document.getElementById('spinBtn');
+        spinBtn.disabled = true;
+        spinBtn.innerText = "🎲 正在随机...";
+
+        const extraSpins = 5;
+        const randomAngle = Math.floor(Math.random() * 360);
+        const totalDegree = 360 * extraSpins + randomAngle;
+        currentDegree += totalDegree;
+
+        canvas.style.transition = "transform 4s cubic-bezier(0.2, 0.8, 0.1, 1)";
+        canvas.style.transform = `rotate(${currentDegree}deg)`;
+        
+        setTimeout(() => {
+            isSpinning = false;
+            spinBtn.disabled = false;
+            spinBtn.innerText = "GO! 再来一次";
+            
+            const actualRotation = currentDegree % 360;
+            const degreeUnderPointer = (270 - actualRotation + 360) % 360;
+            const index = Math.floor(degreeUnderPointer / (360/items.length));
+            
+            document.getElementById('resultText').innerText = items[index].name;
+            document.getElementById('resultModal').style.display = 'flex';
+        }, 4000);
+    }
+</script>
+</body>
+</html>

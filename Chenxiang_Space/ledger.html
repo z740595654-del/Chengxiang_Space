@@ -1,0 +1,1848 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>家庭账本 Beta</title>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --text: #f1f5f9;
+      --dim: #94a3b8;
+      --border: 1px solid rgba(255, 255, 255, 0.1);
+      --input-bg: #0f172a;
+      --input-border: #334155;
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+      --bar-bg: #334155;
+      --green: #22c55e;
+      --red: #ef4444;
+      --blue: #3b82f6;
+      --orange: #f59e0b;
+    }
+    html[data-theme="light"] {
+      --bg: #f1f5f9;
+      --panel: #ffffff;
+      --text: #0f172a;
+      --dim: #64748b;
+      --border: 1px solid #e2e8f0;
+      --input-bg: #ffffff;
+      --input-border: #cbd5e1;
+      --shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.08);
+      --bar-bg: #e2e8f0;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        system-ui, sans-serif;
+      margin: 0;
+      padding: 10px 12px 40px;
+      transition: background 0.25s ease, color 0.25s ease;
+    }
+    .page-wrap {
+      max-width: 900px;
+      margin: 48px auto 0;
+    }
+    .card {
+      background: var(--panel);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 12px;
+      border: var(--border);
+      box-shadow: var(--shadow);
+      transition: background 0.25s ease, border 0.25s ease,
+        box-shadow 0.25s ease;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    @media (min-width: 768px) {
+      body {
+        padding: 16px 0 60px;
+      }
+      .grid-4 {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+    h2,
+    h3,
+    h4 {
+      margin: 0 0 8px;
+      font-weight: 600;
+    }
+    .label {
+      color: var(--dim);
+      font-size: 0.78rem;
+    }
+    .value {
+      font-size: 1.2rem;
+      font-weight: 600;
+      font-family: "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono",
+        "Courier New", monospace;
+    }
+    .highlight {
+      color: var(--green);
+    }
+    .warning {
+      color: var(--red);
+    }
+    input,
+    select,
+    textarea {
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      color: var(--text);
+      padding: 7px 8px;
+      border-radius: 8px;
+      width: 100%;
+      box-sizing: border-box;
+      margin-bottom: 6px;
+      font-size: 0.85rem;
+    }
+    input::placeholder,
+    textarea::placeholder {
+      color: var(--dim);
+    }
+    button {
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      width: 100%;
+    }
+    button.secondary {
+      background: var(--input-border);
+      color: var(--text);
+    }
+    button:active {
+      transform: translateY(1px);
+      opacity: 0.9;
+    }
+    .progress-container {
+      margin: 8px 0;
+    }
+    .progress-bar {
+      height: 12px;
+      background: var(--bar-bg);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .progress-fill {
+      height: 100%;
+      transition: width 0.35s ease;
+    }
+    .tx-list {
+      max-height: 360px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+    }
+    .tx-item {
+      border-bottom: 1px solid var(--input-border);
+      padding: 8px 0;
+      display: grid;
+      grid-template-columns: 2fr 3fr 2fr;
+      column-gap: 6px;
+      align-items: center;
+    }
+    .tx-meta {
+      color: var(--dim);
+      font-size: 0.7rem;
+    }
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid var(--input-border);
+    }
+    .tab {
+      padding: 4px 8px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      color: var(--dim);
+      font-size: 0.85rem;
+    }
+    .tab.active {
+      border-color: var(--blue);
+      color: var(--blue);
+      font-weight: 600;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    .nav-btns {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 20;
+      display: flex;
+      gap: 8px;
+    }
+    .circle-btn {
+      width: 34px;
+      height: 34px;
+      background: var(--panel);
+      color: var(--text);
+      border: var(--border);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      font-size: 1rem;
+    }
+    .metric-label {
+      font-size: 0.78rem;
+      color: var(--dim);
+      margin-bottom: 4px;
+    }
+    .metric-value {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      background: rgba(148, 163, 184, 0.15);
+      color: var(--dim);
+    }
+  </style>
+</head>
+<body>
+  <div class="nav-btns">
+    <a href="index.html" class="circle-btn" title="返回主页">🏠</a>
+    <div
+      class="circle-btn"
+      id="themeIcon"
+      onclick="toggleTheme()"
+      title="切换主题"
+    >
+      🌙
+    </div>
+  </div>
+
+  <div class="page-wrap">
+    <!-- 顶部资产卡 -->
+    <div class="card">
+      <div class="row" style="margin-bottom: 8px">
+        <div class="label">当前资产概览</div>
+        <div class="label" id="periodDate">账期计算中...</div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <div class="metric-label">💰 目前余额</div>
+          <div class="metric-value" id="valBalance">¥0.00</div>
+        </div>
+        <div style="text-align: right">
+          <div class="metric-label">🧨 广发欠款（估算）</div>
+          <div class="metric-value" id="valGfDebt">--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 总览 + CFO 提示 -->
+    <div class="card">
+      <div class="grid-2">
+        <div>
+          <div class="label" id="lblRemainTitle">本期剩余预算</div>
+          <div class="value" id="valRemaining">--</div>
+        </div>
+        <div style="text-align: right">
+          <div class="label" id="lblDailyTitle">动态日均可花</div>
+          <div class="value" id="valDailyAvg">--</div>
+        </div>
+      </div>
+      <div class="row" style="margin-top: 10px">
+        <span class="label">本期已消费 (B 口径)</span>
+        <span class="value" id="valSpent">¥0.00</span>
+      </div>
+      <div class="row" style="margin-top: 10px">
+        <span class="pill" style="cursor: pointer" onclick="toggleConfig()"
+          >⚙️ 配置 / 账期范围</span
+        >
+      </div>
+      <div
+        style="
+          margin-top: 12px;
+          padding: 8px;
+          background: rgba(59, 130, 246, 0.08);
+          border-left: 3px solid var(--blue);
+          border-radius: 6px;
+        "
+      >
+        <span style="font-size: 1.2rem">👨‍💼</span>
+        <span id="cfoComment" class="label" style="margin-left: 4px"
+          >CFO 正在分析你的花钱速度...</span
+        >
+      </div>
+    </div>
+
+    <!-- 配置卡 -->
+    <div
+      id="configPanel"
+      class="card"
+      style="display: none; border-color: var(--orange)"
+    >
+      <h3>⚙️ 账本配置</h3>
+      <div class="grid-2">
+        <div>
+          <label class="label">账期起始日 (每月)</label>
+          <input type="number" id="cfgStartDay" value="10" />
+        </div>
+        <div>
+          <label class="label">单账期预算 (CNY)</label>
+          <input type="number" id="cfgBudget" value="3500" />
+        </div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <label class="label">目前余额（钱包总和）</label>
+          <input type="number" id="cfgBalance" placeholder="比如 1200" />
+        </div>
+        <div>
+          <label class="label">广发信用卡欠款估算</label>
+          <input type="number" id="cfgGfDebt" placeholder="例如 10000" />
+        </div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <label class="label">访问密码（可选）</label>
+          <input type="password" id="cfgKey" placeholder="留空则不校验" />
+        </div>
+        <div>
+          <label class="label">账期范围</label>
+          <select id="cfgScope">
+            <option value="current">本账期</option>
+            <option value="all">全部账期（汇总）</option>
+          </select>
+        </div>
+      </div>
+      <button onclick="saveSettings()">保存配置并重算</button>
+    </div>
+
+    <!-- 宏观竞速 -->
+    <div class="card">
+      <h3>🏎️ 宏观竞速</h3>
+      <div class="progress-container">
+        <div class="row">
+          <span class="label">📅 时间进度</span>
+          <span class="label" id="lblTimeProg">0%</span>
+        </div>
+        <div class="progress-bar">
+          <div
+            class="progress-fill"
+            id="barTime"
+            style="background: var(--dim); width: 0%"
+          ></div>
+        </div>
+      </div>
+      <div class="progress-container">
+        <div class="row">
+          <span class="label">💸 预算消耗 (B 口径)</span>
+          <span class="label" id="lblBudgetProg">0%</span>
+        </div>
+        <div class="progress-bar">
+          <div
+            class="progress-fill"
+            id="barBudget"
+            style="background: var(--green); width: 0%"
+          ></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 消费博弈 -->
+    <div class="card">
+      <div class="row">
+        <h3>📈 消费博弈</h3>
+        <span class="label">点柱子可以看当天明细</span>
+      </div>
+      <div id="chartDiv" style="width: 100%; height: 280px"></div>
+      <div id="dayDetail" class="label" style="margin-top: 6px"></div>
+    </div>
+
+    <!-- 重点指标 + 饼图 -->
+    <div class="card">
+      <h3>📌 重点指标</h3>
+      <div class="grid-4">
+        <div>
+          <div class="metric-label">🚗 汽车相关</div>
+          <div class="metric-value" id="valCarAmt">¥0.00</div>
+          <div class="label" id="valCarMeta">0 笔 · 0%</div>
+        </div>
+        <div>
+          <div class="metric-label">🎮 娱乐相关</div>
+          <div class="metric-value" id="valEntAmt">¥0.00</div>
+          <div class="label" id="valEntMeta">0 笔 · 0%</div>
+        </div>
+        <div>
+          <div class="metric-label">⚡ 生活缴费</div>
+          <div class="metric-value" id="valUtilAmt">¥0.00</div>
+          <div class="label" id="valUtilMeta">0 笔 · 0%</div>
+        </div>
+        <div>
+          <div class="metric-label">🍚 饮食相关</div>
+          <div class="metric-value" id="valFoodAmt">¥0.00</div>
+          <div class="label" id="valFoodMeta">0 笔 · 0%</div>
+        </div>
+      </div>
+      <div id="pieChart" style="width: 100%; height: 220px; margin-top: 8px"></div>
+      <div id="pieDetail" class="label" style="margin-top: 6px"></div>
+    </div>
+
+    <!-- 大额消费卡片 -->
+    <div class="card">
+      <h3>💸 大额消费（手动剔除）</h3>
+      <div class="label">
+        勾选下方条目，可将其从预算与图表中剔除，只在此卡片统计。适合像显示器这种一次性大件。
+      </div>
+      <div id="bigList" class="label" style="margin-top: 6px"></div>
+    </div>
+
+    <!-- 数据舱（录入） -->
+    <div class="card">
+      <div class="tabs">
+        <div
+          class="tab active"
+          id="tab-btn-single"
+          onclick="switchTab('single')"
+        >
+          ⚡ 快速记一笔
+        </div>
+        <div class="tab" id="tab-btn-batch" onclick="switchTab('batch')">
+          📄 批量导入
+        </div>
+      </div>
+
+      <!-- 单条录入 -->
+      <div id="tab-single" class="tab-content active">
+        <div class="grid-2">
+          <input type="date" id="inDate" />
+          <input type="number" id="inAmount" placeholder="金额" />
+        </div>
+        <div class="grid-2">
+          <select id="inCat1">
+            <option value="生活">生活</option>
+            <option value="娱乐">娱乐</option>
+            <option value="其他">其他</option>
+            <option value="收入">收入</option>
+            <option value="还款">还款</option>
+            <option value="往来">往来</option>
+          </select>
+          <input
+            type="text"
+            id="inCat2"
+            placeholder="二级分类 (如: 烟草/饮料)"
+            list="cat2List"
+          />
+          <datalist id="cat2List">
+            <option value="餐饮"></option>
+            <option value="烟草"></option>
+            <option value="饮料"></option>
+            <option value="交通"></option>
+            <option value="停车"></option>
+            <option value="游戏"></option>
+          </datalist>
+        </div>
+        <input type="text" id="inDesc" placeholder="用途备注" />
+        <div class="grid-2">
+          <select id="inAcc">
+            <option value="微信">微信</option>
+            <option value="支付宝">支付宝</option>
+            <option value="余额">余额</option>
+            <option value="信用卡">信用卡</option>
+          </select>
+          <input type="text" id="inBook" placeholder="账本，如：主账" value="主账" />
+        </div>
+        <div class="grid-2">
+          <select id="inXiao">
+            <option value="否">非小荷包</option>
+            <option value="是">是小荷包</option>
+          </select>
+          <div></div>
+        </div>
+        <button onclick="submitSingle()">记账</button>
+      </div>
+
+      <!-- 批量导入 -->
+      <div id="tab-batch" class="tab-content">
+        <p class="label">
+          格式:
+          交易号,日期,金额,一级,二级,用途,账户,账本,小荷包(是/否)
+        </p>
+        <textarea
+          id="csvInput"
+          rows="5"
+          placeholder="20251001-0001,2025-10-01,44.65,娱乐,出去玩,电影+爆米花,余额,主账,否"
+        ></textarea>
+        <div class="grid-2">
+          <button class="secondary" onclick="fillDemo()">填入示例</button>
+          <button onclick="submitBatch()">存入数据库</button>
+        </div>
+        <div
+          id="importResult"
+          class="label"
+          style="margin-top: 10px; color: var(--green)"
+        ></div>
+        <pre
+          id="importErrors"
+          class="label"
+          style="
+            margin-top: 6px;
+            white-space: pre-wrap;
+            max-height: 160px;
+            overflow: auto;
+            color: var(--red);
+          "
+        ></pre>
+      </div>
+    </div>
+
+    <!-- 明细 -->
+    <div class="card">
+      <div class="row">
+        <h3>📝 明细</h3>
+        <div style="font-size: 0.78rem; color: var(--dim)">
+          <label
+            ><input
+              type="checkbox"
+              id="chkBscope"
+              checked
+              onchange="renderAll()"
+            />
+            仅看 B 口径</label
+          >
+        </div>
+      </div>
+      <div id="txList" class="tx-list"></div>
+      <button class="secondary" style="margin-top: 8px" onclick="exportCSV()">
+        📤 导出 CSV
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const LEDGER_API_BASE = "https://czbpght.cn/ledger";
+
+    let appState = {
+      settings: {
+        period_start: 10,
+        total_budget: 3500,
+        current_balance: 0,
+        gf_debt: 0,
+      },
+      scope: "current", // current | all | period:YYYY-MM-DD
+      ledgerKey: "",
+      transactions: [],
+      period: { start: "", end: "", days: 0 },
+      today: new Date().toISOString().split("T")[0],
+      balanceBase: { value: null, date: null }, // 余额锚点：设定余额时的数值 + 最后一笔交易日期
+      excludedTxIds: [], // 被剔除的大额消费 tx_id 列表
+      periodChoices: [], // 数据中存在的所有账期
+      lastBScope: [], // 最近一次用于图表的 B 口径数据
+    };
+
+    window.onload = async () => {
+      initTheme();
+      initSettings();
+      const dateInput = document.getElementById("inDate");
+      if (dateInput) dateInput.value = appState.today;
+      await loadTransactions();
+    };
+
+    /* ========== 主题 ========== */
+    function initTheme() {
+      const saved = localStorage.getItem("ledger_theme") || "dark";
+      setTheme(saved);
+    }
+    function toggleTheme() {
+      const cur = document.documentElement.getAttribute("data-theme") || "dark";
+      const next = cur === "light" ? "dark" : "light";
+      setTheme(next);
+    }
+    function setTheme(theme) {
+      document.documentElement.setAttribute("data-theme", theme);
+      localStorage.setItem("ledger_theme", theme);
+      const btn = document.getElementById("themeIcon");
+      if (btn) btn.innerText = theme === "light" ? "☀️" : "🌙";
+      if (appState.lastBScope.length) {
+        drawCharts(appState.lastBScope, theme === "light");
+        renderKeyMetrics(appState.lastBScope);
+      }
+    }
+
+    /* ========== 工具函数 ========== */
+    function formatDateLocal(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${dd}`;
+    }
+    function sumAmount(list) {
+      return list.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    }
+    function normalizeDateInput(str) {
+      if (!str) return str;
+      let s = String(str).trim();
+      s = s.replace(/[./]/g, "-");
+      const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      if (m) {
+        const y = m[1];
+        const mm = m[2].padStart(2, "0");
+        const dd = m[3].padStart(2, "0");
+        return `${y}-${mm}-${dd}`;
+      }
+      return s;
+    }
+
+    /* ========== 配置初始化 ========== */
+    function initSettings() {
+      try {
+        const saved = localStorage.getItem("ledger_settings");
+        if (saved) {
+          const s = JSON.parse(saved);
+          if (typeof s.period_start === "number")
+            appState.settings.period_start = s.period_start;
+          if (typeof s.total_budget === "number")
+            appState.settings.total_budget = s.total_budget;
+          if (typeof s.current_balance === "number")
+            appState.settings.current_balance = s.current_balance;
+          if (typeof s.gf_debt === "number")
+            appState.settings.gf_debt = s.gf_debt;
+        }
+      } catch (e) {}
+      const key = localStorage.getItem("ledger_key") || "";
+      appState.ledgerKey = key;
+
+      let scope = localStorage.getItem("ledger_scope") || "current";
+      appState.scope = scope;
+
+      // 余额锚点
+      const baseValStr = localStorage.getItem("ledger_balance_base_value");
+      const baseDate = localStorage.getItem("ledger_balance_base_date");
+      if (baseValStr !== null && baseDate) {
+        const n = parseFloat(baseValStr);
+        if (!isNaN(n)) {
+          appState.balanceBase = { value: n, date: baseDate };
+        }
+      }
+
+      // 剔除的大额 tx_id 列表
+      try {
+        const excl = localStorage.getItem("ledger_excluded_tx");
+        if (excl) {
+          const arr = JSON.parse(excl);
+          if (Array.isArray(arr)) appState.excludedTxIds = arr;
+        }
+      } catch (e) {
+        appState.excludedTxIds = [];
+      }
+
+      // 写回配置面板
+      document.getElementById("cfgStartDay").value =
+        appState.settings.period_start;
+      document.getElementById("cfgBudget").value =
+        appState.settings.total_budget;
+      document.getElementById("cfgBalance").value =
+        appState.settings.current_balance || "";
+      document.getElementById("cfgGfDebt").value =
+        appState.settings.gf_debt || "";
+      document.getElementById("cfgKey").value = key;
+      document.getElementById("cfgScope").value = scope;
+
+      renderAssets();
+    }
+
+    function saveSettings() {
+      const start = parseInt(
+        document.getElementById("cfgStartDay").value,
+        10
+      );
+      const budget = parseFloat(document.getElementById("cfgBudget").value);
+      const bal = parseFloat(document.getElementById("cfgBalance").value);
+      const gf = parseFloat(document.getElementById("cfgGfDebt").value);
+      const key = (document.getElementById("cfgKey").value || "").trim();
+      const scopeVal = document.getElementById("cfgScope").value || "current";
+
+      appState.settings = {
+        period_start: isNaN(start) ? 10 : start,
+        total_budget: isNaN(budget) ? 3500 : budget,
+        current_balance: isNaN(bal) ? 0 : bal,
+        gf_debt: isNaN(gf) ? 0 : gf,
+      };
+      appState.ledgerKey = key;
+      appState.scope = scopeVal;
+
+      localStorage.setItem(
+        "ledger_settings",
+        JSON.stringify(appState.settings)
+      );
+      localStorage.setItem("ledger_key", key);
+      localStorage.setItem("ledger_scope", scopeVal);
+
+      // 重新设定余额锚点：以当前已存在的最新一笔交易日期为锚点
+      if (!isNaN(bal)) {
+        let maxDate = appState.today;
+        if (appState.transactions.length) {
+          maxDate = appState.transactions[0].date;
+          appState.transactions.forEach((tx) => {
+            if (tx.date > maxDate) maxDate = tx.date;
+          });
+        }
+        appState.balanceBase = { value: bal, date: maxDate };
+        localStorage.setItem("ledger_balance_base_value", String(bal));
+        localStorage.setItem("ledger_balance_base_date", maxDate);
+      }
+
+      toggleConfig();
+      loadTransactions();
+    }
+
+    /* ========== 顶部资产卡：余额 & 广发 ========== */
+    function renderAssets() {
+      let displayBal = appState.settings.current_balance || 0;
+
+      // 如果有余额锚点，就根据锚点 + 后续流水自动滚动
+      const base = appState.balanceBase;
+      if (base && base.value != null && base.date && appState.transactions.length) {
+        let delta = 0;
+        for (const tx of appState.transactions) {
+          if (tx.date > base.date) {
+            if (tx.category_level1 === "收入") {
+              delta += tx.amount;
+            } else {
+              // 简化逻辑：除了收入，其他一律视为支出
+              delta -= tx.amount;
+            }
+          }
+        }
+        displayBal = base.value + delta;
+      }
+
+      const gf = appState.settings.gf_debt || 0;
+      const rate = 0.015; // 千五左右
+      const interest = gf * rate;
+
+      document.getElementById("valBalance").innerText =
+        "¥" + displayBal.toFixed(2);
+      if (gf > 0) {
+        document.getElementById("valGfDebt").innerText =
+          "¥" + gf.toFixed(0) + "（月息约 ¥" + interest.toFixed(0) + "）";
+      } else {
+        document.getElementById("valGfDebt").innerText =
+          "无负债或未填写";
+      }
+    }
+
+    function toggleConfig() {
+      const el = document.getElementById("configPanel");
+      el.style.display = el.style.display === "none" ? "block" : "none";
+    }
+
+    /* ========== 公共 API ========== */
+    function buildHeaders(isJson) {
+      const h = {};
+      if (isJson) h["Content-Type"] = "application/json";
+      if (appState.ledgerKey) h["x-ledger-key"] = appState.ledgerKey;
+      return h;
+    }
+
+    async function apiGet(path, params = {}) {
+      const url = new URL(LEDGER_API_BASE + path);
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== "")
+          url.searchParams.set(k, v);
+      });
+      try {
+        const res = await fetch(url.toString(), {
+          headers: buildHeaders(false),
+        });
+        if (res.status === 401) {
+          alert("访问被拒绝，请在『配置』里检查访问密码。");
+          return null;
+        }
+        if (!res.ok) {
+          alert("接口错误：" + res.status);
+          return null;
+        }
+        return await res.json();
+      } catch (e) {
+        alert("网络错误：" + e.message);
+        return null;
+      }
+    }
+
+    async function apiPostJson(path, body) {
+      try {
+        const res = await fetch(LEDGER_API_BASE + path, {
+          method: "POST",
+          headers: buildHeaders(true),
+          body: JSON.stringify(body),
+        });
+        if (res.status === 401) {
+          alert("访问被拒绝，请在『配置』里检查访问密码。");
+          return null;
+        }
+        if (!res.ok) {
+          alert("接口错误：" + res.status);
+          return null;
+        }
+        return await res.json().catch(() => ({ ok: true }));
+      } catch (e) {
+        alert("网络错误：" + e.message);
+        return null;
+      }
+    }
+
+    /* ========== 交易加载 & 账期构建 ========== */
+    async function loadTransactions() {
+      const data = await apiGet("/transactions", {});
+      appState.transactions = (data || []).map(normalizeTx);
+
+      rebuildPeriodOptions();
+      calculatePeriod();
+      renderAll();
+    }
+
+    function normalizeTx(t) {
+      return {
+        tx_id: t.tx_id || t.id || null,
+        date: t.date,
+        amount: Number(t.amount),
+        category_level1: t.category_level1 || "",
+        category_level2: t.category_level2 || "",
+        description: t.description || "",
+        account: t.account || "",
+        book: t.book || "",
+        is_xiaoe: Number(t.is_xiaoe) === 1,
+      };
+    }
+
+    function rebuildPeriodOptions() {
+      const txs = appState.transactions;
+      const sel = document.getElementById("cfgScope");
+      if (!sel) return;
+
+      const startDay = appState.settings.period_start;
+      const periodMap = new Map(); // startStr -> { start, end }
+
+      txs.forEach((tx) => {
+        const d = new Date(tx.date);
+        if (isNaN(d)) return;
+        const ps = getPeriodStartForDate(d, startDay);
+        const startStr = formatDateLocal(ps);
+        if (!periodMap.has(startStr)) {
+          const end = new Date(ps);
+          end.setMonth(end.getMonth() + 1);
+          end.setDate(end.getDate() - 1);
+          periodMap.set(startStr, {
+            start: startStr,
+            end: formatDateLocal(end),
+          });
+        }
+      });
+
+      const periods = Array.from(periodMap.values()).sort((a, b) =>
+        a.start < b.start ? -1 : 1
+      );
+      appState.periodChoices = periods;
+
+      const prevValue = sel.value;
+      sel.innerHTML = "";
+
+      // 本账期
+      const optCur = document.createElement("option");
+      optCur.value = "current";
+      optCur.textContent = "本账期";
+      sel.appendChild(optCur);
+
+      // 历史账期
+      periods.forEach((p) => {
+        const opt = document.createElement("option");
+        opt.value = "period:" + p.start;
+        opt.textContent = `账期 ${p.start} ~ ${p.end}`;
+        sel.appendChild(opt);
+      });
+
+      // 全部账期
+      const optAll = document.createElement("option");
+      optAll.value = "all";
+      optAll.textContent = "全部账期（汇总）";
+      sel.appendChild(optAll);
+
+      const allValues = Array.from(sel.options).map((o) => o.value);
+      let newValue = prevValue;
+      if (!allValues.includes(newValue)) newValue = "current";
+      sel.value = newValue;
+      appState.scope = newValue;
+    }
+
+    function calculatePeriod() {
+      const scope = appState.scope;
+      const labelEl = document.getElementById("periodDate");
+
+      if (!appState.transactions.length) {
+        appState.period = { start: "", end: "", days: 0 };
+        labelEl.innerText = "当前暂无交易数据";
+        return;
+      }
+
+      if (scope === "all") {
+        let minDateStr = appState.transactions[0].date;
+        let maxDateStr = appState.transactions[0].date;
+        for (const tx of appState.transactions) {
+          if (tx.date < minDateStr) minDateStr = tx.date;
+          if (tx.date > maxDateStr) maxDateStr = tx.date;
+        }
+        const start = new Date(minDateStr);
+        const end = new Date(maxDateStr);
+        const days = Math.round((end - start) / 86400000) + 1;
+        appState.period = {
+          start: minDateStr,
+          end: maxDateStr,
+          days: days,
+        };
+        labelEl.innerText = `全部账期: ${minDateStr} ~ ${maxDateStr}`;
+        return;
+      }
+
+      if (scope.startsWith("period:")) {
+        const startStr = scope.slice("period:".length);
+        const found =
+          appState.periodChoices.find((p) => p.start === startStr) || null;
+        let sStr = startStr;
+        let eStr = null;
+        if (found) {
+          sStr = found.start;
+          eStr = found.end;
+        } else {
+          const sDate = new Date(startStr);
+          const eDate = new Date(sDate);
+          eDate.setMonth(eDate.getMonth() + 1);
+          eDate.setDate(eDate.getDate() - 1);
+          eStr = formatDateLocal(eDate);
+        }
+        const sDate = new Date(sStr);
+        const eDate = new Date(eStr);
+        const days = Math.round((eDate - sDate) / 86400000) + 1;
+        appState.period = { start: sStr, end: eStr, days };
+        labelEl.innerText = `账期: ${sStr} ~ ${eStr}`;
+        return;
+      }
+
+      // scope === "current"
+      const today = new Date();
+      const startDay = appState.settings.period_start;
+      let start = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        startDay
+      );
+      if (today.getDate() < startDay) {
+        start.setMonth(start.getMonth() - 1);
+      }
+      let end = new Date(start);
+      end.setMonth(end.getMonth() + 1);
+      end.setDate(end.getDate() - 1);
+      const startStr = formatDateLocal(start);
+      const endStr = formatDateLocal(end);
+      const days = Math.round((end - start) / 86400000) + 1;
+      appState.period = { start: startStr, end: endStr, days };
+      labelEl.innerText = `本账期: ${startStr} ~ ${endStr}`;
+    }
+
+    function inCurrentPeriod(tx) {
+      const scope = appState.scope;
+      if (scope === "all") return true;
+      const s = appState.period.start;
+      const e = appState.period.end;
+      if (!s || !e) return true;
+      return tx.date >= s && tx.date <= e;
+    }
+
+    /* ========== B 口径 + 剔除大额 ========== */
+    function isExcluded(tx) {
+      if (!tx.tx_id) return false;
+      return (
+        Array.isArray(appState.excludedTxIds) &&
+        appState.excludedTxIds.indexOf(tx.tx_id) !== -1
+      );
+    }
+
+    function filterBBase(list) {
+      return list.filter((tx) => {
+        if (["收入", "还款", "往来"].includes(tx.category_level1))
+          return false;
+        if (tx.is_xiaoe) return false;
+        return true;
+      });
+    }
+
+    function filterBScope(list) {
+      return filterBBase(list).filter((tx) => !isExcluded(tx));
+    }
+
+    function getPeriodStartForDate(d, startDay) {
+      const y = d.getFullYear();
+      const m = d.getMonth();
+      const dd = d.getDate();
+      let start = new Date(y, m, startDay);
+      if (dd < startDay) {
+        start.setMonth(start.getMonth() - 1);
+      }
+      return start;
+    }
+
+    function diffMonths(a, b) {
+      return (
+        (b.getFullYear() - a.getFullYear()) * 12 +
+        (b.getMonth() - a.getMonth())
+      );
+    }
+
+    function calcGlobalPeriodInfo(bData) {
+      if (!bData.length) return null;
+      let minDateStr = bData[0].date;
+      let maxDateStr = bData[0].date;
+      for (const tx of bData) {
+        if (tx.date < minDateStr) minDateStr = tx.date;
+        if (tx.date > maxDateStr) maxDateStr = tx.date;
+      }
+      const minDate = new Date(minDateStr);
+      const maxDate = new Date(maxDateStr);
+      const startDay = appState.settings.period_start;
+      const firstStart = getPeriodStartForDate(minDate, startDay);
+      const lastStart = getPeriodStartForDate(maxDate, startDay);
+      const periods = diffMonths(firstStart, lastStart) + 1;
+      const lastEnd = new Date(lastStart);
+      lastEnd.setMonth(lastEnd.getMonth() + 1);
+      lastEnd.setDate(lastEnd.getDate() - 1);
+      const totalBudgetAll = periods * appState.settings.total_budget;
+      return { periods, totalBudgetAll, firstStart, lastEnd };
+    }
+
+    /* ========== 主渲染逻辑 ========== */
+    function renderAll() {
+      const periodTx = appState.transactions.filter(inCurrentPeriod);
+      const bBase = filterBBase(periodTx); // 原始 B 口径（含大额）
+      const bData = bBase.filter((tx) => !isExcluded(tx)); // 真正参与预算的 B 口径
+
+      appState.lastBScope = bData;
+
+      const totalSpent = sumAmount(bData);
+
+      // 更新资产卡（余额跟随流水）
+      renderAssets();
+
+      const remainLabelEl =
+        document.getElementById("lblRemainTitle");
+      const dailyLabelEl =
+        document.getElementById("lblDailyTitle");
+
+      let remaining = 0;
+      let timeProg = 0;
+      let budgetProg = 0;
+      let dailyAvg = 0;
+      let daysPassed = 0;
+      let daysTotal = appState.period.days || 0;
+      let budgetTotal = 0;
+
+      const scope = appState.scope;
+
+      if (scope === "all") {
+        const info = calcGlobalPeriodInfo(bData);
+        if (!info) {
+          document.getElementById("valRemaining").innerText = "¥0.00";
+          document.getElementById("valDailyAvg").innerText = "¥0.00";
+          document.getElementById("valSpent").innerText = "¥0.00";
+          document.getElementById("barTime").style.width = "0%";
+          document.getElementById("barBudget").style.width = "0%";
+          document.getElementById("chartDiv").innerHTML =
+            '<div class="label">全部账期暂无 B 口径消费，图表无法绘制。</div>';
+          renderKeyMetrics(bData);
+          renderBigPurchases(bBase);
+          runCFOComment(0, 0);
+          renderList([]);
+          return;
+        }
+        const { periods, totalBudgetAll, firstStart, lastEnd } = info;
+        const startStr = formatDateLocal(firstStart);
+        const endStr = formatDateLocal(lastEnd);
+        const days = Math.round((lastEnd - firstStart) / 86400000) + 1;
+        appState.period = { start: startStr, end: endStr, days };
+        daysTotal = days;
+        daysPassed = days;
+        budgetTotal = totalBudgetAll;
+        remaining = budgetTotal - totalSpent;
+
+        timeProg = 100;
+        budgetProg =
+          budgetTotal > 0 ? (totalSpent / budgetTotal) * 100 : 0;
+        dailyAvg = periods > 0 ? totalSpent / periods : 0;
+
+        document.getElementById("periodDate").innerText =
+          `全部账期: ${startStr} ~ ${endStr}（共 ${periods} 个账期）`;
+        remainLabelEl.innerText =
+          "累计剩余预算（按账期预算折算）";
+        dailyLabelEl.innerText = "平均每账期消费";
+      } else {
+        daysTotal = appState.period.days || 0;
+        const startDate = new Date(appState.period.start);
+        const endDate = new Date(appState.period.end);
+        const now = new Date();
+        if (now <= startDate) {
+          daysPassed = 0;
+        } else if (now >= endDate) {
+          daysPassed = daysTotal;
+        } else {
+          let diffDays = Math.floor((now - startDate) / 86400000);
+          if (diffDays < 0) diffDays = 0;
+          if (diffDays > daysTotal - 1) diffDays = daysTotal - 1;
+          daysPassed = diffDays + 1;
+        }
+
+        const remainingDays = Math.max(
+          1,
+          daysTotal - Math.max(daysPassed, 1) + 1
+        );
+        budgetTotal = appState.settings.total_budget;
+        remaining = budgetTotal - totalSpent;
+        dailyAvg = remaining / remainingDays;
+        timeProg =
+          daysTotal > 0 ? (daysPassed / daysTotal) * 100 : 0;
+        budgetProg =
+          budgetTotal > 0 ? (totalSpent / budgetTotal) * 100 : 0;
+
+        remainLabelEl.innerText = "本期剩余预算";
+        dailyLabelEl.innerText = "动态日均可花";
+      }
+
+      const remainEl = document.getElementById("valRemaining");
+      remainEl.innerText = "¥" + remaining.toFixed(2);
+      remainEl.className =
+        remaining < 0 ? "value warning" : "value highlight";
+      document.getElementById("valDailyAvg").innerText =
+        "¥" + dailyAvg.toFixed(2);
+      document.getElementById("valSpent").innerText =
+        "¥" + totalSpent.toFixed(2);
+
+      // 进度条 + 具体数值
+      const timeBar = document.getElementById("barTime");
+      const budgetBar = document.getElementById("barBudget");
+      const timePct = Math.max(
+        0,
+        Math.min(100, timeProg || 0)
+      ).toFixed(1);
+      const budgetPct = Math.max(
+        0,
+        Math.min(100, budgetProg || 0)
+      ).toFixed(1);
+
+      timeBar.style.width = `${timePct}%`;
+      document.getElementById(
+        "lblTimeProg"
+      ).innerText = `${daysPassed}/${daysTotal || 0} 天 (${timePct}%)`;
+
+      budgetBar.style.width = `${budgetPct}%`;
+      budgetBar.style.background =
+        budgetProg > timeProg ? "var(--red)" : "var(--green)";
+      document.getElementById(
+        "lblBudgetProg"
+      ).innerText = `¥${totalSpent.toFixed(
+        2
+      )} / ¥${budgetTotal.toFixed(2)} (${budgetPct}%)`;
+
+      renderKeyMetrics(bData);
+      renderBigPurchases(bBase);
+      runCFOComment(timeProg, budgetProg);
+      const theme =
+        document.documentElement.getAttribute("data-theme") ||
+        "dark";
+      drawCharts(bData, theme === "light");
+
+      const showB = document.getElementById("chkBscope").checked;
+      const listData = showB ? bData : periodTx;
+      renderList(listData);
+    }
+
+    /* ========== 分类逻辑：车 / 娱乐 / 缴费 / 饮食 / 烟草 / 饮料 / 其他 ========== */
+// 统一的消费分类，用于饼图 & 重点指标
+function classifyCategory(tx) {
+  const c1 = tx.category_level1 || "";
+  const c2 = tx.category_level2 || "";
+  const desc = tx.description || "";
+  // 全部转成小写，方便匹配英文
+  const text = (c1 + " " + c2 + " " + desc).toLowerCase();
+
+  // 🚗 汽车相关
+  if (
+    /停车|车位|高速|保养|洗车|修车|特斯拉|充电|油费|车位电费|年检|保险/.test(
+      text
+    )
+  ) {
+    return "car";
+  }
+
+  // ⚡ 生活缴费
+  if (/水费|电费|燃气|煤气|宽带|网费|话费|流量|固话/.test(text)) {
+    return "util";
+  }
+
+  // 🚬 烟草
+  if (/烟|香烟|卷烟|利群|中华|芙蓉王/.test(text)) {
+    return "smoke";
+  }
+
+  // 🧃 饮料 / 奶茶
+  if (
+    /饮料|奶茶|咖啡|可乐|雪碧|汽水|果汁|茶|星巴克|喜茶|奈雪/.test(
+      text
+    )
+  ) {
+    return "drink";
+  }
+
+  // 🎮 娱乐：如果一级分类就是“娱乐”，直接算娱乐
+  if (
+    c1.includes("娱乐") ||
+    /游戏|娱乐|ktv|酒吧|电影|影院|演唱会|剧本杀|桌游|门票|展览|密室/.test(
+      text
+    )
+  ) {
+    return "ent";
+  }
+
+  // 🍚 饮食：优先看二级分类“食物/餐饮”，再看描述里的关键词
+  if (
+    c2.includes("食物") ||
+    c2.includes("餐饮") ||
+    /早餐|早饭|午餐|午饭|晚餐|晚饭|中餐|夜宵|宵夜|外卖|点餐|吃饭|正餐|米线|米粉|面馆|烧烤|火锅|自助|汉堡|炸鸡|盖饭|饭店|餐厅|小吃|零食|便当/.test(
+      text
+    )
+  ) {
+    return "food";
+  }
+
+  // 其它都归为“其他”
+  return "other";
+}
+
+
+    function renderKeyMetrics(bData) {
+      const total = sumAmount(bData);
+      const keys = [
+        "car",
+        "ent",
+        "util",
+        "food",
+        "smoke",
+        "drink",
+        "other",
+      ];
+      const buckets = {};
+      keys.forEach((k) => {
+        buckets[k] = { amt: 0, cnt: 0 };
+      });
+
+      bData.forEach((tx) => {
+        const k = classifyCategory(tx);
+        const b = buckets[k];
+        b.amt += tx.amount;
+        b.cnt += 1;
+      });
+
+      const setMetric = (key, amtId, metaId) => {
+        const b = buckets[key];
+        const amtEl = document.getElementById(amtId);
+        const metaEl = document.getElementById(metaId);
+        amtEl.innerText = "¥" + b.amt.toFixed(2);
+        const ratio =
+          total > 0 ? ((b.amt / total) * 100).toFixed(1) : "0.0";
+        metaEl.innerText = `${b.cnt} 笔 · ${ratio}%`;
+      };
+
+      // 重点指标卡片只展示这四个
+      setMetric("car", "valCarAmt", "valCarMeta");
+      setMetric("ent", "valEntAmt", "valEntMeta");
+      setMetric("util", "valUtilAmt", "valUtilMeta");
+      setMetric("food", "valFoodAmt", "valFoodMeta");
+
+      // 饼图：车 / 娱乐 / 缴费 / 饮食 / 烟草 / 饮料 / 其他
+      const pieDiv = document.getElementById("pieChart");
+      const pieDetail = document.getElementById("pieDetail");
+
+      if (!total || total <= 0) {
+        pieDiv.innerHTML =
+          '<div class="label">暂无 B 口径消费，饼图空空如也。</div>';
+        pieDetail.innerText = "";
+        return;
+      }
+
+      const pieCfg = [
+        { key: "car", label: "汽车" },
+        { key: "ent", label: "娱乐" },
+        { key: "util", label: "生活缴费" },
+        { key: "food", label: "饮食" },
+        { key: "smoke", label: "烟草" },
+        { key: "drink", label: "饮料/奶茶" },
+        { key: "other", label: "其他" },
+      ];
+
+      const labels = [];
+      const vals = [];
+      pieCfg.forEach((c) => {
+        const b = buckets[c.key];
+        if (b.amt > 0.01) {
+          labels.push(c.label);
+          vals.push(b.amt);
+        }
+      });
+
+      if (!vals.length) {
+        pieDiv.innerHTML =
+          '<div class="label">暂无 B 口径消费，饼图空空如也。</div>';
+        pieDetail.innerText = "";
+        return;
+      }
+
+      const theme =
+        document.documentElement.getAttribute("data-theme") ||
+        "dark";
+      const textColor = theme === "light" ? "#64748b" : "#cbd5f5";
+      const layout = {
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        font: { color: textColor },
+        margin: { t: 10, l: 10, r: 10, b: 10 },
+        showlegend: false,
+      };
+      const trace = {
+        labels,
+        values: vals,
+        type: "pie",
+        textinfo: "label+percent",
+        insidetextorientation: "radial",
+      };
+      Plotly.newPlot("pieChart", [trace], layout, {
+        displayModeBar: false,
+      });
+
+      pieDiv.on("plotly_click", function (evt) {
+        if (!evt || !evt.points || !evt.points.length) return;
+        const label = evt.points[0].label;
+        showPieCategoryDetail(label);
+      });
+    }
+
+    function showPieCategoryDetail(label) {
+      const labelMap = {
+        汽车: "car",
+        娱乐: "ent",
+        生活缴费: "util",
+        饮食: "food",
+        烟草: "smoke",
+        "饮料/奶茶": "drink",
+        其他: "other",
+      };
+      const key = labelMap[label];
+      const pieDetail = document.getElementById("pieDetail");
+      if (!key || !pieDetail) return;
+      const data = appState.lastBScope || [];
+      const list = data.filter(
+        (tx) => classifyCategory(tx) === key
+      );
+      if (!list.length) {
+        pieDetail.innerText = `${label}：当前范围内暂无记录`;
+        return;
+      }
+      const sum = sumAmount(list);
+      const rows = list
+        .slice(0, 20)
+        .map(
+          (tx) =>
+            `${tx.date} · ${tx.category_level1}-${tx.category_level2 || "-"} · ${
+              tx.description || ""
+            } · ¥${tx.amount.toFixed(2)}`
+        );
+      let extra = "";
+      if (list.length > 20)
+        extra = `（仅显示前 20 条，共 ${list.length} 条）`;
+      pieDetail.innerText =
+        `${label} 合计 ¥${sum.toFixed(2)}，共 ${list.length} 笔${extra}：\n` +
+        rows.join("\n");
+    }
+
+    /* ========== 大额消费卡片 ========== */
+    function renderBigPurchases(bBase) {
+      const container = document.getElementById("bigList");
+      if (!container) return;
+
+      if (!bBase.length) {
+        container.innerHTML = "当前账期暂无 B 口径消费记录。";
+        return;
+      }
+
+      const excludedSet = new Set(appState.excludedTxIds || []);
+      const today = new Date(appState.today);
+      const BIG_THRESHOLD = 500; // 默认大额阈值
+
+      const excluded = bBase.filter(
+        (tx) => tx.tx_id && excludedSet.has(tx.tx_id)
+      );
+      const candidates = bBase
+        .filter(
+          (tx) =>
+            tx.tx_id &&
+            !excludedSet.has(tx.tx_id) &&
+            tx.amount >= BIG_THRESHOLD
+        )
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 30);
+
+      let html = "";
+
+      if (excluded.length) {
+        html +=
+          '<div class="label" style="margin-bottom:4px;">已剔除（不计入预算与图表）</div>';
+        excluded.forEach((tx) => {
+          const d = new Date(tx.date);
+          const diffDays = Math.max(
+            1,
+            Math.floor((today - d) / 86400000) + 1
+          );
+          const perDay = tx.amount / diffDays;
+          const title =
+            tx.description ||
+            tx.category_level2 ||
+            tx.category_level1 ||
+            "未命名消费";
+          html += `<div style="margin-bottom:4px;">
+             <label>
+               <input type="checkbox" data-txid="${tx.tx_id}" onchange="toggleExclude(this)" checked />
+               ${tx.date} · ${title} · ¥${tx.amount.toFixed(2)}
+             </label>
+             <div class="tx-meta">已拥有 ${diffDays} 天 · 日均摊 ¥${perDay.toFixed(
+            2
+          )}/天</div>
+           </div>`;
+        });
+      }
+
+      html +=
+        '<div class="label" style="margin:6px 0 2px;">候选大额支出（默认阈值 ≥ ¥500）</div>';
+      if (!candidates.length) {
+        html +=
+          '<div class="tx-meta">当前账期暂无超过阈值的大额支出。</div>';
+      } else {
+        candidates.forEach((tx) => {
+          const title =
+            tx.description ||
+            tx.category_level2 ||
+            tx.category_level1 ||
+            "未命名消费";
+          html += `<div style="margin-bottom:4px;">
+            <label>
+              <input type="checkbox" data-txid="${tx.tx_id}" onchange="toggleExclude(this)" />
+              ${tx.date} · ${title} · ¥${tx.amount.toFixed(2)}
+            </label>
+          </div>`;
+        });
+      }
+
+      container.innerHTML = html;
+    }
+
+    function toggleExclude(checkbox) {
+      const txId = checkbox.getAttribute("data-txid");
+      if (!txId) return;
+      let arr = Array.isArray(appState.excludedTxIds)
+        ? appState.excludedTxIds.slice()
+        : [];
+      if (checkbox.checked) {
+        if (!arr.includes(txId)) arr.push(txId);
+      } else {
+        arr = arr.filter((id) => id !== txId);
+      }
+      appState.excludedTxIds = arr;
+      localStorage.setItem("ledger_excluded_tx", JSON.stringify(arr));
+      renderAll();
+    }
+
+    /* ========== CFO 总评 ========== */
+    function runCFOComment(timeProg, budgetProg) {
+      const delta = (budgetProg - timeProg).toFixed(1);
+      let c = "";
+      if (budgetProg === 0 && timeProg === 0) {
+        c = "还没有产生 B 口径消费，CFO 在旁边看戏。";
+      } else if (delta < -5) {
+        c = `你领先时间 ${Math.abs(
+          delta
+        )}%，花得挺克制，可以考虑给自己一点小奖励（但别是烟）。`;
+      } else if (Math.abs(delta) <= 5) {
+        c = "节奏刚刚好，消费基本跟时间同步，保持这个状态就很舒服。";
+      } else {
+        c = `已经比时间快了 ${delta}% ，后面几天要稍微踩一下刹车。`;
+      }
+      document.getElementById("cfoComment").innerText = c;
+    }
+
+    /* ========== 消费博弈图 ========== */
+    function drawCharts(bData, isLight) {
+      const chartDiv = document.getElementById("chartDiv");
+      const dayDetail = document.getElementById("dayDetail");
+
+      if (!bData.length) {
+        chartDiv.innerHTML =
+          '<div class="label">当前范围内暂无 B 口径消费。</div>';
+        dayDetail.innerText = "";
+        return;
+      }
+      const textColor = isLight ? "#64748b" : "#cbd5f5";
+      const gridColor = isLight ? "#e2e8f0" : "#334155";
+
+      const dailyMap = {};
+      bData.forEach((t) => {
+        if (!dailyMap[t.date]) dailyMap[t.date] = 0;
+        dailyMap[t.date] += t.amount;
+      });
+      const dates = Object.keys(dailyMap).sort();
+      const amounts = dates.map((d) => dailyMap[d]);
+
+      const info = calcGlobalPeriodInfo(bData);
+      const totalBudget =
+        appState.scope === "all"
+          ? info
+            ? info.totalBudgetAll
+            : appState.settings.total_budget
+          : appState.settings.total_budget;
+      const totalDays =
+        appState.scope === "all"
+          ? info
+            ? info.periods * 30
+            : dates.length
+          : appState.period.days || dates.length;
+
+      const dynLine = [];
+      let cum = 0;
+      for (let i = 0; i < dates.length; i++) {
+        cum += amounts[i];
+        const remainingBudget = totalBudget - cum;
+        const remainingDays = totalDays - (i + 1);
+        dynLine.push(remainingDays > 0 ? remainingBudget / remainingDays : 0);
+      }
+
+      const zhDates = dates.map((d) => {
+        const [y, m, dd] = d.split("-");
+        return Number(m) + "月" + Number(dd) + "日";
+      });
+
+      const traceBar = {
+        x: zhDates,
+        y: amounts,
+        type: "bar",
+        name: "当日消费",
+        marker: { color: "#3b82f6" },
+      };
+      const traceLine = {
+        x: zhDates,
+        y: dynLine,
+        type: "scatter",
+        mode: "lines",
+        name: "动态日均可花",
+        line: { color: "#f97316", dash: "solid" },
+      };
+      const layout = {
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        font: { color: textColor },
+        margin: { t: 10, l: 36, r: 10, b: 40 },
+        showlegend: false,
+        xaxis: {
+          gridcolor: gridColor,
+          tickangle: -45,
+          automargin: true,
+        },
+        yaxis: {
+          gridcolor: gridColor,
+          automargin: true,
+        },
+      };
+      Plotly.newPlot("chartDiv", [traceBar, traceLine], layout, {
+        displayModeBar: false,
+      });
+
+      chartDiv.on("plotly_click", function (evt) {
+        if (!evt || !evt.points || !evt.points.length) return;
+        const idx = evt.points[0].pointIndex;
+        const dateStr = dates[idx];
+        showDayDetail(dateStr);
+      });
+    }
+
+    function showDayDetail(dateStr) {
+      const list = appState.transactions.filter(
+        (t) => t.date === dateStr && inCurrentPeriod(t)
+      );
+      const dayDetail = document.getElementById("dayDetail");
+      const zh = (() => {
+        const [y, m, d] = dateStr.split("-");
+        return Number(m) + "月" + Number(d) + "日";
+      })();
+      if (!list.length) {
+        dayDetail.innerText = zh + "：无记录";
+        return;
+      }
+      const sum = sumAmount(list);
+      const brief = list
+        .map(
+          (t) =>
+            `${t.category_level1}-${t.category_level2 || "-"} ¥${t.amount.toFixed(
+              2
+            )}`
+        )
+        .join("；");
+      dayDetail.innerText =
+        `${zh} 共 ¥${sum.toFixed(2)}：` + brief;
+    }
+
+    /* ========== 明细列表 ========== */
+    function renderList(list) {
+      const html = list
+        .map(
+          (t) => `
+        <div class="tx-item">
+          <div>
+            <div>${t.date.slice(5)}</div>
+            <div class="tx-meta">${t.account || ""}</div>
+          </div>
+          <div>
+            <div style="font-weight:600;">${
+              t.category_level1 || "-"
+            } - ${t.category_level2 || "-"}</div>
+            <div class="tx-meta">${t.description || ""}</div>
+          </div>
+          <div style="text-align:right; color:${
+            t.category_level1 === "收入"
+              ? "var(--green)"
+              : "var(--text)"
+          }">
+            ${t.category_level1 === "收入" ? "+" : "-"}¥${t.amount.toFixed(
+            2
+          )}
+          </div>
+        </div>
+      `
+        )
+        .join("");
+      document.getElementById("txList").innerHTML =
+        html || '<div class="label">当前范围内暂无记录。</div>';
+    }
+
+    /* ========== 单笔记账 / 批量导入 / 导出 ========== */
+    async function submitSingle() {
+      const rawDate =
+        document.getElementById("inDate").value || appState.today;
+      const date = normalizeDateInput(rawDate);
+      const amount = parseFloat(
+        document.getElementById("inAmount").value
+      );
+      const cat1 = document.getElementById("inCat1").value;
+      const cat2 = document.getElementById("inCat2").value;
+      const desc = document.getElementById("inDesc").value;
+      const acc = document.getElementById("inAcc").value;
+      const book = document.getElementById("inBook").value || "主账";
+      const xiaoVal = document.getElementById("inXiao").value;
+      const is_xiaoe = xiaoVal === "是";
+
+      if (!amount) {
+        alert("金额必填");
+        return;
+      }
+      const base = date.replace(/-/g, "");
+      const suffix = String(Math.floor(Math.random() * 10000)).padStart(
+        4,
+        "0"
+      );
+      const tx_id = `${base}-${suffix}`;
+      const tx = {
+        tx_id,
+        date,
+        amount,
+        category_level1: cat1,
+        category_level2: cat2,
+        description: desc,
+        account: acc,
+        book,
+        is_xiaoe,
+      };
+      const res = await apiPostJson("/transactions", tx);
+      if (res) {
+        alert("记账成功");
+        document.getElementById("inAmount").value = "";
+        document.getElementById("inDesc").value = "";
+        loadTransactions();
+      }
+    }
+
+    async function submitBatch() {
+      const raw = document.getElementById("csvInput").value.trim();
+      if (!raw) {
+        alert("请先粘贴一点数据");
+        return;
+      }
+      const resultEl = document.getElementById("importResult");
+      const errorsEl = document.getElementById("importErrors");
+      resultEl.innerText = "导入中...";
+      if (errorsEl) errorsEl.innerText = "";
+      const lines = raw
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean);
+      let success = 0;
+      const errors = [];
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const cols = line.split(",");
+        if (cols.length < 9) {
+          errors.push(
+            `第 ${i + 1} 行列数不足（实际 ${cols.length} 列）\n${line}`
+          );
+          continue;
+        }
+        let [
+          tx_id,
+          date,
+          amountStr,
+          cat1,
+          cat2,
+          desc,
+          account,
+          book,
+          xiaoeStr,
+        ] = cols.map((s) => s.trim());
+        date = normalizeDateInput(date);
+        const amount = Number(amountStr);
+        if (!date || !amount) {
+          errors.push(
+            `第 ${i + 1} 行日期或金额有问题\n${line}`
+          );
+          continue;
+        }
+        const lower = xiaoeStr.toLowerCase();
+        const is_xiaoe =
+          xiaoeStr === "是" ||
+          xiaoeStr === "1" ||
+          lower === "true" ||
+          lower === "yes";
+        const body = {
+          tx_id,
+          date,
+          amount,
+          category_level1: cat1,
+          category_level2: cat2,
+          description: desc,
+          account,
+          book,
+          is_xiaoe,
+        };
+        const res = await apiPostJson("/transactions", body);
+        if (res) success++;
+        else
+          errors.push(
+            `第 ${i + 1} 行后台返回错误\n${line}`
+          );
+      }
+      resultEl.innerText = `成功导入 ${success} 条，错误 ${errors.length} 条`;
+      if (errorsEl) {
+        errorsEl.innerText = errors.join("\n\n");
+      }
+      loadTransactions();
+    }
+
+    function switchTab(t) {
+      document
+        .querySelectorAll(".tab")
+        .forEach((e) => e.classList.remove("active"));
+      document
+        .querySelectorAll(".tab-content")
+        .forEach((e) => e.classList.remove("active"));
+      if (t === "single") {
+        document
+          .getElementById("tab-btn-single")
+          .classList.add("active");
+        document
+          .getElementById("tab-single")
+          .classList.add("active");
+      } else {
+        document
+          .getElementById("tab-btn-batch")
+          .classList.add("active");
+        document
+          .getElementById("tab-batch")
+          .classList.add("active");
+      }
+    }
+
+    function fillDemo() {
+      document.getElementById("csvInput").value =
+        "20251001-0001,2025-10-01,44.65,娱乐,出去玩,电影+爆米花,余额,主账,否\n" +
+        "20251001-0002,2025-10-01,36,生活,交通,停车,余额,主账,否";
+    }
+
+    async function exportCSV() {
+      let url = `${LEDGER_API_BASE}/export`;
+      if (appState.scope !== "all") {
+        url += `?from=${encodeURIComponent(
+          appState.period.start
+        )}&to=${encodeURIComponent(appState.period.end)}`;
+      }
+      try {
+        const res = await fetch(url, {
+          headers: buildHeaders(false),
+        });
+        if (res.status === 401) {
+          alert("访问被拒绝，请检查访问密码");
+          return;
+        }
+        if (!res.ok) {
+          alert("导出失败：" + res.status);
+          return;
+        }
+        const blob = await res.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "ledger_export.csv";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } catch (e) {
+        alert("导出过程中网络错误：" + e.message);
+      }
+    }
+  </script>
+</body>
+</html>

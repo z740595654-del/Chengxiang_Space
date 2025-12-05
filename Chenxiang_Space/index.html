@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的数字空间</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --card-hover: #334155;
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --accent: #38bdf8;
+            --accent-glow: rgba(56, 189, 248, 0.2);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: radial-gradient(circle at top, #1e293b 0, #020617 55%);
+            color: var(--text-main);
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 24px;
+        }
+
+        .page {
+            width: 100%;
+            max-width: 960px;
+        }
+
+        header {
+            margin-bottom: 24px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-dim);
+            padding: 4px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(148,163,184,0.4);
+            background: rgba(15,23,42,0.7);
+            backdrop-filter: blur(8px);
+        }
+
+        .badge-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 999px;
+            background: #22c55e;
+            box-shadow: 0 0 0 4px rgba(34,197,94,0.2);
+        }
+
+        h1 {
+            font-size: 28px;
+            margin: 12px 0 4px 0;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--text-dim);
+            max-width: 520px;
+        }
+
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .bento-card {
+            background-color: var(--card);
+            border-radius: 20px;
+            padding: 20px;
+            text-decoration: none;
+            color: inherit;
+            border: 1px solid rgba(148,163,184,0.25);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 180px;
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease, background-color 0.25s ease;
+        }
+
+        .bento-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at top left, var(--accent-glow), transparent 60%);
+            opacity: 0;
+            transition: opacity 0.25s ease;
+            pointer-events: none;
+        }
+
+        .bento-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 18px 40px rgba(15,23,42,0.9);
+            border-color: var(--accent);
+            background-color: var(--card-hover);
+        }
+
+        .bento-card:hover::before {
+            opacity: 1;
+        }
+
+        .icon-box {
+            width: 40px;
+            height: 40px;
+            border-radius: 16px;
+            background: rgba(15,23,42,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            margin-bottom: 12px;
+        }
+
+        .card-title {
+            font-size: 18px;
+            margin: 0 0 6px 0;
+        }
+
+        .card-desc {
+            font-size: 13px;
+            color: var(--text-dim);
+            margin: 0 0 10px 0;
+        }
+
+        .card-footer {
+            margin-top: auto;
+            font-size: 12px;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .card-footer span {
+            font-size: 14px;
+        }
+
+        footer {
+            margin-top: 24px;
+            font-size: 12px;
+            color: var(--text-dim);
+            text-align: center;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 16px;
+            }
+            h1 {
+                font-size: 22px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+    <header>
+        <div class="badge">
+            <span class="badge-dot"></span>
+            <span>我的数字小玩具集合</span>
+        </div>
+        <h1>我的数字空间</h1>
+        <p class="subtitle">
+            一些自己写来用的小工具：帮我决定吃什么、管账、顺便当情绪垃圾桶。
+        </p>
+    </header>
+
+    <div class="bento-grid">
+        <!-- 1. 干饭大转盘 -->
+        <a href="food.html" class="bento-card">
+            <div class="icon-box">🍕</div>
+            <div>
+                <h3 class="card-title">干饭大转盘</h3>
+                <p class="card-desc">多用户云同步美食决策系统。随机转一转，解决「吃什么」灵魂拷问。</p>
+            </div>
+            <div class="card-footer">
+                <span>打开</span> →
+            </div>
+        </a>
+
+        <!-- 2. 家庭账本（已上线） -->
+        <a href="ledger.html" class="bento-card">
+            <div class="icon-box">💰</div>
+            <div>
+                <h3 class="card-title">家庭账本</h3>
+                <p class="card-desc">CFO 仪表盘：预算进度、烟草占比、汽车含金量，一眼看到底。</p>
+            </div>
+            <div class="card-footer">
+                <span>开始记账</span> →
+            </div>
+        </a>
+
+        <!-- 3. 联系我 -->
+        <a href="mailto:your_email@example.com" class="bento-card">
+            <div class="icon-box">📮</div>
+            <div>
+                <h3 class="card-title">联系我</h3>
+                <p class="card-desc">有想法、有 Bug、想一起折腾，可以直接发邮件来聊。</p>
+            </div>
+            <div class="card-footer">
+                <span>发送邮件</span> →
+            </div>
+        </a>
+    </div>
+
+    <footer>
+        © 2025 Powered by Cloudflare
+    </footer>
+</div>
+</body>
+</html>
