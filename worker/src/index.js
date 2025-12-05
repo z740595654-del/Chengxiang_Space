@@ -284,7 +284,7 @@ async function handleGetTransactions(url, env) {
     params.push(to);
   }
 
-  sql += " ORDER BY date ASC, tx_id ASC";
+  sql += " ORDER BY date DESC, tx_id DESC";
 
   const res = await env.MY_DB.prepare(sql).bind(...params).all();
   return json(res.results || []);
@@ -416,7 +416,7 @@ async function handleExportCsv(env) {
             description,account,book,is_xiaoe
      FROM ledger_transactions
      WHERE (is_deleted IS NULL OR is_deleted = 0)
-     ORDER BY date ASC, tx_id ASC`
+     ORDER BY date DESC, tx_id DESC`
   ).all();
 
   const rows = res.results || [];
