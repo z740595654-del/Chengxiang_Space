@@ -1294,8 +1294,7 @@ function classifyCategory(tx) {
       const pieDetail = document.getElementById("pieDetail");
 
       if (!total || total <= 0) {
-        pieDiv.innerHTML =
-          '<div class="label">暂无 B 口径消费，饼图空空如也。</div>';
+        pieDiv.innerHTML = "";
         pieDetail.innerText = "";
         return;
       }
@@ -1320,8 +1319,7 @@ function classifyCategory(tx) {
       });
 
       if (!vals.length) {
-        pieDiv.innerHTML =
-          '<div class="label">暂无 B 口径消费，饼图空空如也。</div>';
+        pieDiv.innerHTML = "";
         pieDetail.innerText = "";
         return;
       }
