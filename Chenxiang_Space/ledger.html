@@ -416,10 +416,7 @@
 
     <!-- 大额消费卡片 -->
     <div class="card">
-      <h3>💸 大额消费（手动剔除）</h3>
-      <div class="label">
-        勾选下方条目，可将其从预算与图表中剔除，只在此卡片统计。适合像显示器这种一次性大件。
-      </div>
+      <h3>💸 大额消费</h3>
       <div id="bigList" class="label" style="margin-top: 6px"></div>
     </div>
 
@@ -1084,7 +1081,7 @@
           document.getElementById("chartDiv").innerHTML =
             '<div class="label">全部账期暂无 B 口径消费，图表无法绘制。</div>';
           renderKeyMetrics(bData);
-          renderBigPurchases(bBase);
+          renderBigPurchases(appState.transactions);
           runCFOComment(0, 0);
           renderList([]);
           return;
@@ -1177,7 +1174,7 @@
       )} / ¥${budgetTotal.toFixed(2)} (${budgetPct}%)`;
 
       renderKeyMetrics(bData);
-      renderBigPurchases(bBase);
+      renderBigPurchases(appState.transactions);
       runCFOComment(timeProg, budgetProg);
       const theme =
         document.documentElement.getAttribute("data-theme") ||
@@ -1397,12 +1394,16 @@ function classifyCategory(tx) {
     }
 
     /* ========== 大额消费卡片 ========== */
-    function renderBigPurchases(bBase) {
+    function renderBigPurchases(fullList) {
       const container = document.getElementById("bigList");
       if (!container) return;
 
+      const bBase = Array.isArray(fullList)
+        ? filterBBase(fullList)
+        : filterBBase(appState.transactions);
+
       if (!bBase.length) {
-        container.innerHTML = "当前账期暂无 B 口径消费记录。";
+        container.innerHTML = "账本暂无 B 口径消费记录。";
         return;
       }
 
@@ -1410,9 +1411,9 @@ function classifyCategory(tx) {
       const today = new Date(appState.today);
       const BIG_THRESHOLD = 500; // 默认大额阈值
 
-      const excluded = bBase.filter(
-        (tx) => tx.tx_id && excludedSet.has(tx.tx_id)
-      );
+      const excluded = bBase
+        .filter((tx) => tx.tx_id && excludedSet.has(tx.tx_id))
+        .sort((a, b) => b.amount - a.amount);
       const candidates = bBase
         .filter(
           (tx) =>
@@ -1420,60 +1421,62 @@ function classifyCategory(tx) {
             !excludedSet.has(tx.tx_id) &&
             tx.amount >= BIG_THRESHOLD
         )
-        .sort((a, b) => b.amount - a.amount)
-        .slice(0, 30);
+        .sort((a, b) => b.amount - a.amount);
 
-      let html = "";
-
-      if (excluded.length) {
-        html +=
-          '<div class="label" style="margin-bottom:4px;">已剔除（不计入预算与图表）</div>';
-        excluded.forEach((tx) => {
+      const renderExcluded = excluded
+        .map((tx) => {
           const d = new Date(tx.date);
-          const diffDays = Math.max(
-            1,
-            Math.floor((today - d) / 86400000) + 1
-          );
+          const diffDays = Math.max(1, Math.floor((today - d) / 86400000) + 1);
           const perDay = tx.amount / diffDays;
           const title =
-            tx.description ||
-            tx.category_level2 ||
-            tx.category_level1 ||
-            "未命名消费";
-          html += `<div style="margin-bottom:4px;">
-             <label>
-               <input type="checkbox" data-txid="${tx.tx_id}" onchange="toggleExclude(this)" checked />
-               ${tx.date} · ${title} · ¥${tx.amount.toFixed(2)}
-             </label>
-             <div class="tx-meta">已拥有 ${diffDays} 天 · 日均摊 ¥${perDay.toFixed(
+            tx.description || tx.category_level2 || tx.category_level1 || "未命名消费";
+          return `<div style="margin-bottom:8px;">
+              <label>
+                <input type="checkbox" data-txid="${tx.tx_id}" onchange="toggleExclude(this)" checked />
+                ${tx.date} · ${title}
+              </label>
+              <div class="tx-meta">金额 ¥${tx.amount.toFixed(2)} · 日均摊 ¥${perDay.toFixed(
             2
           )}/天</div>
-           </div>`;
-        });
-      }
+            </div>`;
+        })
+        .join("");
 
-      html +=
-        '<div class="label" style="margin:6px 0 2px;">候选大额支出（默认阈值 ≥ ¥500）</div>';
-      if (!candidates.length) {
-        html +=
-          '<div class="tx-meta">当前账期暂无超过阈值的大额支出。</div>';
-      } else {
-        candidates.forEach((tx) => {
+      const renderCandidates = candidates
+        .map((tx) => {
           const title =
-            tx.description ||
-            tx.category_level2 ||
-            tx.category_level1 ||
-            "未命名消费";
-          html += `<div style="margin-bottom:4px;">
-            <label>
-              <input type="checkbox" data-txid="${tx.tx_id}" onchange="toggleExclude(this)" />
-              ${tx.date} · ${title} · ¥${tx.amount.toFixed(2)}
-            </label>
-          </div>`;
-        });
-      }
+            tx.description || tx.category_level2 || tx.category_level1 || "未命名消费";
+          return `<div style="margin-bottom:6px;">
+              <label>
+                <input type="checkbox" data-txid="${tx.tx_id}" onchange="toggleExclude(this)" />
+                ${tx.date} · ${title} · ¥${tx.amount.toFixed(2)}
+              </label>
+            </div>`;
+        })
+        .join("");
 
-      container.innerHTML = html;
+      const excludedHtml = excluded.length
+        ? renderExcluded
+        : '<div class="tx-meta">尚未标记大额消费。</div>';
+
+      const candidateHtml = candidates.length
+        ? renderCandidates
+        : '<div class="tx-meta">暂无金额 ≥ ¥500 的候选条目。</div>';
+
+      container.innerHTML = `
+        <div class="grid-2" style="gap: 12px; align-items: flex-start;">
+          <div>
+            <div class="label" style="margin-bottom: 8px;">已标记大额（从预算与图表剔除）</div>
+            <div>${excludedHtml}</div>
+          </div>
+          <div>
+            <details open>
+              <summary class="label" style="cursor: pointer; user-select: none;">选择大额（≥ ¥500）</summary>
+              <div style="margin-top: 8px;">${candidateHtml}</div>
+            </details>
+          </div>
+        </div>
+      `;
     }
 
     function toggleExclude(checkbox) {
