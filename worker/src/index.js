@@ -62,6 +62,11 @@ export default {
     const path = url.pathname;
     const method = request.method.toUpperCase();
 
+    const serveStatic = () => {
+      if (env?.ASSETS) return env.ASSETS.fetch(request);
+      return fetch(request);
+    };
+
     // CORS 预检
     if (method === "OPTIONS") {
       return new Response(null, {
@@ -74,7 +79,7 @@ export default {
       // ========= 0) 先放行明显的静态资源请求 =========
       // 这能避免你把整个站点“Worker 化”后页面裂开
       if (isHtmlRequest(request, path) && !path.startsWith(LEDGER_PREFIX)) {
-        return fetch(request);
+        return serveStatic();
       }
 
       // ========= 1) 吃饭转盘云端 API（保持兼容：就是根路径 /） =========
@@ -95,7 +100,7 @@ export default {
         // 没带 Key 的 GET / 大概率是访问首页
         // 直接交还给静态站点
         if (method === "GET") {
-          return fetch(request);
+          return serveStatic();
         }
       }
 
