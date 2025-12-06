@@ -557,7 +557,11 @@
       transactions: [],
       period: { start: "", end: "", days: 0 },
       today: new Date().toISOString().split("T")[0],
-      balanceBase: { value: null, date: null }, // 余额锚点：设定余额时的数值 + 最后一笔交易日期
+      balanceBase: {
+        value: null,
+        date: null,
+        tx_id: null,
+      }, // 余额锚点：设定余额时的数值 + 最后一笔交易（用于同日去重）
       excludedTxIds: [], // 被剔除的大额消费 tx_id 列表
       periodChoices: [], // 数据中存在的所有账期
       lastBScope: [], // 最近一次用于图表的 B 口径数据
@@ -641,10 +645,11 @@
       // 余额锚点
       const baseValStr = localStorage.getItem("ledger_balance_base_value");
       const baseDate = localStorage.getItem("ledger_balance_base_date");
+      const baseTxId = localStorage.getItem("ledger_balance_base_txid");
       if (baseValStr !== null && baseDate) {
         const n = parseFloat(baseValStr);
         if (!isNaN(n)) {
-          appState.balanceBase = { value: n, date: baseDate };
+          appState.balanceBase = { value: n, date: baseDate, tx_id: baseTxId };
         }
       }
 
@@ -701,18 +706,24 @@
       localStorage.setItem("ledger_key", key);
       localStorage.setItem("ledger_scope", scopeVal);
 
-      // 重新设定余额锚点：以当前已存在的最新一笔交易日期为锚点
+      // 重新设定余额锚点：以当前已存在的最新一笔交易为锚点
       if (!isNaN(bal)) {
-        let maxDate = appState.today;
+        let anchorDate = appState.today;
+        let anchorTxId = null;
         if (appState.transactions.length) {
-          maxDate = appState.transactions[0].date;
-          appState.transactions.forEach((tx) => {
-            if (tx.date > maxDate) maxDate = tx.date;
-          });
+          // 数据已按日期倒序返回，第一条视为最新交易
+          anchorDate = appState.transactions[0].date;
+          anchorTxId = appState.transactions[0].tx_id || null;
+          // 若存在日期相同但排序在后的交易，保持锚点使用第一条，避免同日重复计算
         }
-        appState.balanceBase = { value: bal, date: maxDate };
+        appState.balanceBase = { value: bal, date: anchorDate, tx_id: anchorTxId };
         localStorage.setItem("ledger_balance_base_value", String(bal));
-        localStorage.setItem("ledger_balance_base_date", maxDate);
+        localStorage.setItem("ledger_balance_base_date", anchorDate);
+        if (anchorTxId) {
+          localStorage.setItem("ledger_balance_base_txid", anchorTxId);
+        } else {
+          localStorage.removeItem("ledger_balance_base_txid");
+        }
       }
 
       toggleConfig();
@@ -728,7 +739,13 @@
       if (base && base.value != null && base.date && appState.transactions.length) {
         let delta = 0;
         for (const tx of appState.transactions) {
-          if (tx.date > base.date) {
+          const isAfterBaseDate = tx.date > base.date;
+          const isSameDayLaterTx =
+            !isAfterBaseDate &&
+            tx.date === base.date &&
+            (!base.tx_id || (tx.tx_id && tx.tx_id > base.tx_id));
+
+          if (isAfterBaseDate || isSameDayLaterTx) {
             if (tx.category_level1 === "收入") {
               delta += tx.amount;
             } else {
