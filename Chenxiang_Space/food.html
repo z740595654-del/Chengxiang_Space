@@ -241,8 +241,7 @@
 <script>
     // ================= 配置区 =================
     // 你的新域名
-    const WORKER_URL = "https://czbpght.cn"; 
-    const API_KEY = "finn_secret_2025"; 
+    const WORKER_URL = "https://czbpght.cn/food";
 
     // ================= 数据核心 =================
     const DB_NAME = 'FoodWheel_Cloud_V7';
@@ -304,27 +303,54 @@
 
         const btn = document.getElementById('syncBtn');
         const statusText = document.getElementById('syncStatus');
-        
+        const logContainer = document.getElementById('logContainer');
+
+        const updateStatus = (text, color = '#666') => {
+            statusText.innerText = text;
+            statusText.style.color = color;
+        };
+
         if(isManual) {
             btn.disabled = true;
             btn.innerText = "⏳ 正在连接...";
         }
-        statusText.innerText = "云端同步中...";
-        statusText.style.color = "#2196f3";
+        updateStatus("步骤 1/2：拉取云端数据...", "#2196f3");
 
         try {
             // 注意：这里不需要传 userId 参数了，后端会自动默认为 1
-            const res = await fetch(WORKER_URL + "?t=" + Date.now(), {
-                method: 'GET',
-                headers: { 'X-Custom-Auth': API_KEY }
-            });
-            
-            if(res.status === 403) throw new Error("密码错误(API Key)");
-            if(!res.ok) throw new Error("网络错误 " + res.status);
-            
+            let res;
+            try {
+                res = await fetch(WORKER_URL + "?t=" + Date.now(), { method: 'GET' });
+            } catch (netErr) {
+                throw new Error("无法连接云端(" + (netErr.message || netErr) + ")");
+            }
+
+            if(!res.ok) {
+                const reason = await res.text().catch(() => '');
+                throw new Error(`云端返回 ${res.status} ${res.statusText || ''}${reason ? '：' + reason : ''}`);
+            }
+
             const cloudText = await res.text();
             let cloudData = { items: [], logs: [] };
-            if(cloudText && cloudText !== "[]") cloudData = JSON.parse(cloudText);
+            if(cloudText) {
+                try {
+                    const parsed = JSON.parse(cloudText);
+                    if(Array.isArray(parsed)) {
+                        cloudData = { items: parsed, logs: [] };
+                    } else if(parsed && typeof parsed === 'object') {
+                        cloudData = {
+                            items: Array.isArray(parsed.items) ? parsed.items : [],
+                            logs: Array.isArray(parsed.logs) ? parsed.logs : []
+                        };
+                    } else {
+                        throw new Error('返回值不是对象或数组');
+                    }
+                } catch (err) {
+                    console.error('云端数据解析失败', err, cloudText);
+                    addLog(`[同步失败] 云端数据无法解析：${err.message || err}`, true);
+                    throw new Error("云端数据格式异常，请联系管理员");
+                }
+            }
 
             // 合并逻辑
             let mergedItems = [...localData.items];
@@ -356,25 +382,38 @@
                 addLog(`自动同步：更新了 ${updateCount} 条数据`, true);
             }
 
-            // 上传
-            await fetch(WORKER_URL, {
-                method: 'PUT',
-                headers: { 'X-Custom-Auth': API_KEY },
-                body: JSON.stringify(localData)
-            });
+            updateStatus("步骤 2/2：上传本地数据...", "#2196f3");
+
+            let putRes;
+            try {
+                putRes = await fetch(WORKER_URL, {
+                    method: 'PUT',
+                    body: JSON.stringify(localData)
+                });
+            } catch (netErr) {
+                throw new Error("上传失败，网络异常(" + (netErr.message || netErr) + ")");
+            }
+
+            if(!putRes.ok) {
+                const reason = await putRes.text().catch(() => '');
+                throw new Error(`上传失败：${putRes.status} ${putRes.statusText || ''}${reason ? '：' + reason : ''}`);
+            }
 
             saveToDB();
             renderUI();
-            
-            statusText.innerText = "已同步 " + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            statusText.style.color = "#666";
+
+            updateStatus("已同步 " + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), "#666");
             if(isManual) alert(`✅ 刷新成功！\n云端更新了 ${updateCount} 条数据到本地。`);
 
         } catch(e) {
             console.error(e);
-            statusText.innerText = "同步失败 (请重试)";
-            statusText.style.color = "var(--hot-pink)";
-            if(isManual) alert("同步失败：" + e.message);
+            updateStatus(`同步失败：${e.message || e}`, "var(--hot-pink)");
+            addLog(`[同步失败] ${e.message || e}`, true);
+            if(logContainer && logContainer.innerText === '暂无日志') {
+                logContainer.innerText = '';
+            }
+            renderUI();
+            if(isManual) alert("同步失败：" + (e.message || e));
         } finally {
             isSyncing = false;
             if(isManual) {
