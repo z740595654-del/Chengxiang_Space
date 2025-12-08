@@ -34,10 +34,16 @@ function getLedgerPassword(env) {
   );
 }
 
+function normalizeFoodKeyValue(raw) {
+  if (!raw) return "";
+  const trimmed = String(raw).trim();
+  return trimmed.length === 0 ? "" : trimmed;
+}
+
 function getFoodApiKey(env) {
   return (
-    env?.FOOD_API_KEY ||
-    env?.FOOD_PASSWORD ||
+    normalizeFoodKeyValue(env?.FOOD_API_KEY) ||
+    normalizeFoodKeyValue(env?.FOOD_PASSWORD) ||
     DEFAULT_FOOD_API_KEY
   );
 }
@@ -89,7 +95,8 @@ export default {
         request.headers.get("X-Custom-Auth") ||
         request.headers.get("x-custom-auth");
 
-      const isFoodPath = path === FOOD_PATH;
+      const isFoodPath =
+        path === FOOD_PATH || path === `${FOOD_PATH}/`;
 
       if (isFoodPath && (method === "GET" || method === "PUT")) {
         const expect = getFoodApiKey(env);
