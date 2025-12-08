@@ -104,3 +104,11 @@
 - 修改点：`WORKER_URL` 与 `LEDGER_API_BASE` 回滚至 `czbpght.cn` 域名，保持转盘同步和账本接口与现有域名一致。
 - 风险点：若 `czbpght.cn` 域名后续迁移或证书异常，可能再次出现请求失败；需要确认前端缓存及时更新到旧域名。
 - 建议：刷新页面后复测转盘同步与账本读写，确认跨域与 TLS 正常；若未来切换域名，应同步更新前端配置并验证。
+
+## 2025-12-08 17:36 北京时间
+- 操作：移除 `worker/wrangler.toml` 的 `[assets]` 绑定，避免 Pages 执行 `wrangler deploy` 时尝试上传整站静态资源；新增 `docs/worker-deploy-notes.md` 说明 Pages 与 Worker 的解耦及控制台调整步骤。
+- 新增点：`docs/worker-deploy-notes.md` 描述 build command/output directory 配置、独立部署 food-sync 与 Lead Finder Worker 的指引。
+- 删除点：取消 worker 配置中的静态资源目录绑定，避免触发 assets-upload-session。
+- 修改点：无其他逻辑变动。
+- 风险点：如果此前依赖 Worker 托管静态文件，移除 assets 后需确保静态资源由 Pages 或其他托管提供；wrangler 发布需在 `worker/` 目录手动执行。
+- 建议：在 Cloudflare Pages 控制台将 Build command 置空或改为 `echo "no build"` 且输出目录设为 `Chenxiang_Space`，并在需要发布 Worker 时手动运行 `wrangler publish` 或使用仪表盘部署。
