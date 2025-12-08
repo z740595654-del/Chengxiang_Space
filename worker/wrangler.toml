@@ -3,9 +3,6 @@ main = "src/index.js"
 compatibility_date = "2025-12-05"
 keep_vars = true
 
-[assets]
-directory = "../Chenxiang_Space"
-
 [[d1_databases]]
 binding = "MY_DB"
 database_name = "food-db"
