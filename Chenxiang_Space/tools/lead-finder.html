@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lead Finder (South America)</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --card-hover: #334155;
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --accent: #38bdf8;
+            --accent-glow: rgba(56, 189, 248, 0.15);
+            --border: rgba(148,163,184,0.25);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: radial-gradient(circle at top, #1e293b 0, #020617 55%);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .page { width: 100%; max-width: 1080px; }
+
+        header { margin-bottom: 20px; }
+        h1 { margin: 0 0 6px 0; font-size: 26px; }
+        .subtitle { color: var(--text-dim); font-size: 14px; margin: 0; }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 18px;
+            margin-bottom: 16px;
+            box-shadow: 0 16px 32px rgba(15,23,42,0.4);
+        }
+
+        .flex-row { display: flex; gap: 12px; flex-wrap: wrap; }
+
+        label { font-size: 13px; color: var(--text-dim); display: block; margin-bottom: 6px; }
+
+        select, button {
+            height: 40px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: #0b162b;
+            color: var(--text-main);
+            padding: 0 12px;
+            font-size: 14px;
+            transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+        }
+
+        select:focus, button:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+
+        button {
+            cursor: pointer;
+            border: 1px solid var(--accent);
+            background: linear-gradient(135deg, #0ea5e9, #06b6d4);
+            color: #0b162b;
+            font-weight: 600;
+        }
+
+        button.secondary { background: #0b162b; color: var(--text-main); border-color: var(--border); }
+
+        button:hover { transform: translateY(-1px); }
+
+        .status { color: var(--text-dim); font-size: 13px; margin-top: 6px; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th, td { border-bottom: 1px solid var(--border); padding: 10px 8px; font-size: 13px; text-align: left; }
+        th { color: var(--text-dim); font-weight: 600; }
+        tr:hover td { background: rgba(51,65,85,0.3); }
+
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+        .tag { display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 999px; background: rgba(56,189,248,0.08); color: var(--accent); font-size: 12px; }
+
+        @media (max-width: 720px) {
+            body { padding: 16px; }
+            table { display: block; overflow-x: auto; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <header>
+            <div class="tag">Lead Finder</div>
+            <h1>Lead Finder (South America)</h1>
+            <p class="subtitle">选择国家和关键词，自动抓取约 10-20 个候选官网，生成客户存档表。</p>
+        </header>
+
+        <div class="card">
+            <div class="flex-row">
+                <div>
+                    <label for="country">Country</label>
+                    <select id="country">
+                        <option>Chile</option>
+                        <option>Peru</option>
+                        <option>Colombia</option>
+                        <option>Argentina</option>
+                        <option>Brazil</option>
+                        <option>Ecuador</option>
+                        <option>Uruguay</option>
+                        <option>Paraguay</option>
+                        <option>Bolivia</option>
+                        <option>Venezuela</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="keyword">Keyword</label>
+                    <select id="keyword">
+                        <option>forklift dealer</option>
+                        <option>forklift rental</option>
+                        <option>warehouse equipment supplier</option>
+                    </select>
+                </div>
+                <div class="actions">
+                    <button id="generate10">Generate 10</button>
+                    <button id="generate20" class="secondary">Generate 20 (2 queries)</button>
+                    <button id="enrich" class="secondary">Enrich missing contacts</button>
+                    <button id="download">Download CSV</button>
+                </div>
+            </div>
+            <div class="status" id="status">Ready.</div>
+        </div>
+
+        <div class="card">
+            <div class="status" id="summary">Current query: - | Returned: 0</div>
+            <table id="lead-table">
+                <thead>
+                    <tr>
+                        <th>Country</th>
+                        <th>Company</th>
+                        <th>Website</th>
+                        <th>Address</th>
+                        <th>Phone</th>
+                        <th>Email</th>
+                    </tr>
+                </thead>
+                <tbody id="lead-body">
+                    <tr><td colspan="6" style="text-align:center; color: var(--text-dim);">No data yet.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const WORKER_BASE = "https://REPLACE_ME.workers.dev";
+
+        const countrySelect = document.getElementById('country');
+        const keywordSelect = document.getElementById('keyword');
+        const statusEl = document.getElementById('status');
+        const summaryEl = document.getElementById('summary');
+        const tbody = document.getElementById('lead-body');
+        const state = { leads: [], lastQuery: '' };
+
+        function setStatus(text) {
+            statusEl.textContent = text;
+        }
+
+        function setSummary(query, count) {
+            summaryEl.textContent = `Current query: ${query || '-'} | Returned: ${count}`;
+        }
+
+        function normalizeOrigin(link) {
+            try {
+                const url = new URL(link);
+                return url.origin;
+            } catch (e) {
+                return link;
+            }
+        }
+
+        function safeHostname(link) {
+            try {
+                return new URL(link).hostname;
+            } catch (e) {
+                return link;
+            }
+        }
+
+        function renderTable() {
+            if (!state.leads.length) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color: var(--text-dim);">No data yet.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = '';
+            state.leads.forEach(lead => {
+                const tr = document.createElement('tr');
+                ['Country','Company','Website','Address','Phone','Email'].forEach(key => {
+                    const td = document.createElement('td');
+                    if (key === 'Website' && lead[key]) {
+                        const a = document.createElement('a');
+                        a.href = lead[key];
+                        a.textContent = lead[key];
+                        a.target = '_blank';
+                        a.rel = 'noopener noreferrer';
+                        td.appendChild(a);
+                    } else {
+                        td.textContent = lead[key] || '';
+                    }
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+        }
+
+        function downloadCSV() {
+            if (!state.leads.length) return alert('No leads to download.');
+            const headers = ['Country','Company','Website','Address','Phone','Email'];
+            const escape = (value) => {
+                const str = value == null ? '' : String(value);
+                if (/[,\n"]/.test(str)) {
+                    return '"' + str.replace(/"/g, '""') + '"';
+                }
+                return str;
+            };
+            const rows = state.leads.map(lead => headers.map(h => escape(lead[h])).join(','));
+            const csv = [headers.join(','), ...rows].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'leads.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        async function fetchLeads(num = 10, start = 1) {
+            const country = countrySelect.value;
+            const keyword = keywordSelect.value;
+            const params = new URLSearchParams({ country, keyword, num: Math.min(num, 10).toString() });
+            if (start && start > 1) params.append('start', String(start));
+
+            const queryText = `${keyword} ${country}`;
+            setStatus(`Fetching: ${queryText} (start ${start}) ...`);
+            try {
+                const resp = await fetch(`${WORKER_BASE}/leads?${params.toString()}`);
+                if (!resp.ok) throw new Error(`Worker error: ${resp.status}`);
+                const data = await resp.json();
+                const existingDomains = new Set(state.leads.map(l => normalizeOrigin(l.Website)));
+                const fresh = (data.leads || []).filter(item => {
+                    const origin = normalizeOrigin(item.Website);
+                    if (!origin || existingDomains.has(origin)) return false;
+                    existingDomains.add(origin);
+                    return true;
+                }).map(item => ({
+                    Country: item.Country || country,
+                    Company: item.Company || safeHostname(item.Website),
+                    Website: normalizeOrigin(item.Website),
+                    Address: item.Address || '',
+                    Phone: item.Phone || '',
+                    Email: item.Email || '',
+                }));
+                state.leads = [...state.leads, ...fresh];
+                state.lastQuery = data.query || queryText;
+                renderTable();
+                setSummary(state.lastQuery, state.leads.length);
+                setStatus(`Fetched ${fresh.length} new leads. Total: ${state.leads.length}.`);
+            } catch (err) {
+                console.error(err);
+                setStatus(`Failed: ${err.message}`);
+            }
+        }
+
+        async function runGenerate10() {
+            state.leads = [];
+            renderTable();
+            setSummary('-', 0);
+            await fetchLeads(10, 1);
+        }
+
+        async function runGenerate20() {
+            state.leads = [];
+            renderTable();
+            setSummary('-', 0);
+            await fetchLeads(10, 1);
+            await fetchLeads(10, 11);
+        }
+
+        async function enrichMissingContacts() {
+            if (!state.leads.length) return alert('No leads to enrich.');
+            const missing = state.leads.filter(l => !l.Email || !l.Phone);
+            if (!missing.length) return alert('All leads already have contact info.');
+            setStatus(`Enriching ${missing.length} leads ...`);
+            for (const lead of missing) {
+                try {
+                    const resp = await fetch(`${WORKER_BASE}/enrich?website=${encodeURIComponent(lead.Website)}`);
+                    if (!resp.ok) throw new Error(`enrich failed ${resp.status}`);
+                    const data = await resp.json();
+                    if (data.Email) lead.Email = data.Email;
+                    if (data.Phone) lead.Phone = data.Phone;
+                } catch (e) {
+                    console.warn('enrich error', e);
+                }
+            }
+            renderTable();
+            setStatus('Enrich complete.');
+        }
+
+        document.getElementById('generate10').addEventListener('click', runGenerate10);
+        document.getElementById('generate20').addEventListener('click', runGenerate20);
+        document.getElementById('download').addEventListener('click', downloadCSV);
+        document.getElementById('enrich').addEventListener('click', enrichMissingContacts);
+    </script>
+</body>
+</html>
