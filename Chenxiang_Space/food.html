@@ -241,7 +241,8 @@
 <script>
     // ================= 配置区 =================
     // 你的新域名
-    const WORKER_URL = "https://czbpght.cn/food";
+    const WORKER_URL = "https://czbpght.cn"; 
+    const API_KEY = "finn_secret_2025"; 
 
     // ================= 数据核心 =================
     const DB_NAME = 'FoodWheel_Cloud_V7';
@@ -314,8 +315,11 @@
         try {
             // 注意：这里不需要传 userId 参数了，后端会自动默认为 1
             const res = await fetch(WORKER_URL + "?t=" + Date.now(), {
-                method: 'GET'
+                method: 'GET',
+                headers: { 'X-Custom-Auth': API_KEY }
             });
+            
+            if(res.status === 403) throw new Error("密码错误(API Key)");
             if(!res.ok) throw new Error("网络错误 " + res.status);
             
             const cloudText = await res.text();
@@ -355,6 +359,7 @@
             // 上传
             await fetch(WORKER_URL, {
                 method: 'PUT',
+                headers: { 'X-Custom-Auth': API_KEY },
                 body: JSON.stringify(localData)
             });
 
