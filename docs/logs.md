@@ -80,3 +80,43 @@
 - 修改点：提高节奏提示的字体粗细与字号，减小字间距，并启用字体平滑以保证文字边缘更清晰。
 - 风险点：字体加粗和字号增大后占用空间略增，极小屏幕上可能与周边元素更紧凑。
 - 建议：在实际设备上确认 ahead/behind 两种状态下的显示对比度，如需进一步增强可适当调整背景色或内边距。
+
+## 2025-12-08 16:40 北京时间
+- 操作：新增 Lead Finder 页面与 Cloudflare Worker 示例，实现按国家与关键词的 Google CSE 搜索，支持导出 6 列客户存档 CSV。
+- 新增点：`tools/lead-finder.html` 允许一键生成 10/20 条官网并去重，支持调用 `/enrich` 补全电话邮箱；`worker/lead-finder-worker.js` 提供 `/leads` 与可选 `/enrich` 接口；`docs/lead-finder-setup.md` 给出部署与使用说明；首页新增入口卡片。
+- 删除点：无。
+- 修改点：在 `/leads` 查询时新增 `start` 参数支持，前端生成 20 条时自动以 start=1 与 start=11 拉取两页并按域名去重，下载 CSV 固定 6 列顺序；为预检请求补充 OPTIONS CORS 响应。
+- 风险点：Google Custom Search API 免费额度有限，频繁查询可能遇到配额或计费；网站去重依赖域名，若同域有多品牌会被合并；enrich 正则抓取可能因反爬或页面结构差异失败。
+- 建议：部署前在 Worker 设置好 `GOOGLE_API_KEY` 与 `GOOGLE_CSE_ID`，并在前端替换 `WORKER_BASE`；首次使用时分别测试 Generate 10/20 与 CSV 下载，观察 Google API 是否命中配额限制；如需更精细的联系人挖掘，可在 Worker 中追加更复杂的解析逻辑。
+
+## 2025-12-08 17:09 北京时间
+- 操作：将干饭转盘与账本的 Cloudflare Worker 访问域名改为 `food-sync.740595654.workers.dev`，并为 Lead Finder 去除末尾斜杠以避免双斜杠路径导致 404。
+- 新增点：无。
+- 删除点：无。
+- 修改点：更新 `WORKER_URL`、`LEDGER_API_BASE` 与 `WORKER_BASE` 的域名配置，确保 API 请求直连部署中的 Worker 实例，避免旧域名失效或路径拼接异常引发的 failed to fetch/404。
+- 风险点：新域名依赖 Cloudflare Worker 部署可用性，若未发布或凭证缺失依旧会返回错误；前端缓存的旧文件可能需强制刷新以生效。
+- 建议：部署后在浏览器控制台验证干饭转盘与 Lead Finder 的请求状态码为 200，必要时清理缓存或确认 Worker 域名、密钥配置正确。
+
+## 2025-12-08 17:13 北京时间
+- 操作：恢复干饭转盘与账本的 Worker 域名为 `https://czbpght.cn`，确保继续使用既有的 food-sync 配置。
+- 新增点：无。
+- 删除点：无。
+- 修改点：`WORKER_URL` 与 `LEDGER_API_BASE` 回滚至 `czbpght.cn` 域名，保持转盘同步和账本接口与现有域名一致。
+- 风险点：若 `czbpght.cn` 域名后续迁移或证书异常，可能再次出现请求失败；需要确认前端缓存及时更新到旧域名。
+- 建议：刷新页面后复测转盘同步与账本读写，确认跨域与 TLS 正常；若未来切换域名，应同步更新前端配置并验证。
+
+## 2025-12-08 17:36 北京时间
+- 操作：移除 `worker/wrangler.toml` 的 `[assets]` 绑定，避免 Pages 执行 `wrangler deploy` 时尝试上传整站静态资源；新增 `docs/worker-deploy-notes.md` 说明 Pages 与 Worker 的解耦及控制台调整步骤。
+- 新增点：`docs/worker-deploy-notes.md` 描述 build command/output directory 配置、独立部署 food-sync 与 Lead Finder Worker 的指引。
+- 删除点：取消 worker 配置中的静态资源目录绑定，避免触发 assets-upload-session。
+- 修改点：无其他逻辑变动。
+- 风险点：如果此前依赖 Worker 托管静态文件，移除 assets 后需确保静态资源由 Pages 或其他托管提供；wrangler 发布需在 `worker/` 目录手动执行。
+- 建议：在 Cloudflare Pages 控制台将 Build command 置空或改为 `echo "no build"` 且输出目录设为 `Chenxiang_Space`，并在需要发布 Worker 时手动运行 `wrangler publish` 或使用仪表盘部署。
+
+## 2025-12-08 18:00 北京时间
+- 操作：在 `docs/worker-deploy-notes.md` 补充可选的 Worker 自动部署指引，明确 Pages 仍可单独发布静态站点，同时可通过显式命令部署 food-sync Worker。
+- 新增点：给出 `npx wrangler deploy --config worker/wrangler.toml` 的本地/CI 示例，以及 Pages 构建阶段若要顺带部署 Worker 的配置步骤。
+- 删除点：无。
+- 修改点：文档强调当前 `worker/wrangler.toml` 已移除 `[assets]`，即便部署也只更新 API Worker，不会上传静态文件。
+- 风险点：在 Pages 中启用自动部署需确保绑定账户具备 D1 与 food-sync Worker 的权限，否则构建会因权限不足失败。
+- 建议：如需自动部署，优先在 CI/本地执行命令或确认 Pages 权限齐全；若不想在 Pages 部署 Worker，继续使用纯静态构建配置即可。
