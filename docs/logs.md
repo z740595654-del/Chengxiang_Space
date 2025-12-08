@@ -80,3 +80,11 @@
 - 修改点：提高节奏提示的字体粗细与字号，减小字间距，并启用字体平滑以保证文字边缘更清晰。
 - 风险点：字体加粗和字号增大后占用空间略增，极小屏幕上可能与周边元素更紧凑。
 - 建议：在实际设备上确认 ahead/behind 两种状态下的显示对比度，如需进一步增强可适当调整背景色或内边距。
+
+## 2025-12-08 16:40 北京时间
+- 操作：新增 Lead Finder 页面与 Cloudflare Worker 示例，实现按国家与关键词的 Google CSE 搜索，支持导出 6 列客户存档 CSV。
+- 新增点：`tools/lead-finder.html` 允许一键生成 10/20 条官网并去重，支持调用 `/enrich` 补全电话邮箱；`worker/lead-finder-worker.js` 提供 `/leads` 与可选 `/enrich` 接口；`docs/lead-finder-setup.md` 给出部署与使用说明；首页新增入口卡片。
+- 删除点：无。
+- 修改点：在 `/leads` 查询时新增 `start` 参数支持，前端生成 20 条时自动以 start=1 与 start=11 拉取两页并按域名去重，下载 CSV 固定 6 列顺序；为预检请求补充 OPTIONS CORS 响应。
+- 风险点：Google Custom Search API 免费额度有限，频繁查询可能遇到配额或计费；网站去重依赖域名，若同域有多品牌会被合并；enrich 正则抓取可能因反爬或页面结构差异失败。
+- 建议：部署前在 Worker 设置好 `GOOGLE_API_KEY` 与 `GOOGLE_CSE_ID`，并在前端替换 `WORKER_BASE`；首次使用时分别测试 Generate 10/20 与 CSV 下载，观察 Google API 是否命中配额限制；如需更精细的联系人挖掘，可在 Worker 中追加更复杂的解析逻辑。
