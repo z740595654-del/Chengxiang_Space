@@ -1,4 +1,5 @@
 const LEDGER_PREFIX = "/ledger";
+const FOOD_TABLE = "food_state";
 // build test
 
 // 兼容你现有前端的默认值
@@ -162,13 +163,21 @@ export default {
 async function handleFoodApi(request, env) {
   const method = request.method.toUpperCase();
 
-  await env.MY_DB.prepare(
-    "CREATE TABLE IF NOT EXISTS food_state (id INTEGER PRIMARY KEY, data TEXT NOT NULL)"
-  ).run();
+  if (!env?.MY_DB) {
+    return json(
+      {
+        ok: false,
+        error: "Database not configured: missing MY_DB binding",
+      },
+      500
+    );
+  }
+
+  await ensureFoodTable(env);
 
   if (method === "GET") {
     const row = await env.MY_DB.prepare(
-      "SELECT data FROM food_state WHERE id = 1"
+      `SELECT data FROM ${FOOD_TABLE} WHERE id = 1`
     ).first();
 
     const text = row && row.data ? row.data : "[]";
@@ -190,7 +199,7 @@ async function handleFoodApi(request, env) {
     }
 
     await env.MY_DB.prepare(
-      `INSERT INTO food_state (id, data)
+      `INSERT INTO ${FOOD_TABLE} (id, data)
        VALUES (1, ?)
        ON CONFLICT(id) DO UPDATE SET data = excluded.data`
     )
@@ -204,6 +213,12 @@ async function handleFoodApi(request, env) {
     status: 405,
     headers: corsHeaders(),
   });
+}
+
+async function ensureFoodTable(env) {
+  await env.MY_DB.prepare(
+    `CREATE TABLE IF NOT EXISTS ${FOOD_TABLE} (id INTEGER PRIMARY KEY, data TEXT NOT NULL)`
+  ).run();
 }
 
 /* ========== 账本：自动迁移 / 表结构保障 ========== */
