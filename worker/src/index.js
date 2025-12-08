@@ -1,9 +1,10 @@
 const LEDGER_PREFIX = "/ledger";
+const FOOD_PATH = "/food";
 // build test
 
 // 兼容你现有前端的默认值
 const DEFAULT_LEDGER_PASSWORD = "020117";
-const DEFAULT_FOOD_API_KEY = "finn_secret_2025";
+const DEFAULT_FOOD_API_KEY = "";
 
 function corsHeaders(extra = {}) {
   return {
@@ -82,26 +83,25 @@ export default {
         return serveStatic();
       }
 
-      // ========= 1) 吃饭转盘云端 API（保持兼容：就是根路径 /） =========
+      // ========= 1) 吃饭转盘云端 API（仅 /food 路径） =========
       // 只有带 X-Custom-Auth 才认为是 API 调用
       const foodKey =
         request.headers.get("X-Custom-Auth") ||
         request.headers.get("x-custom-auth");
 
-      if (path === "/" && (method === "GET" || method === "PUT")) {
-        if (foodKey) {
-          const expect = getFoodApiKey(env);
-          if (expect && foodKey !== expect) {
+      const isFoodPath = path === FOOD_PATH;
+
+      if (isFoodPath && (method === "GET" || method === "PUT")) {
+        const expect = getFoodApiKey(env);
+        if (expect) {
+          if (foodKey !== expect) {
             return json({ ok: false, error: "Forbidden" }, 403);
           }
           return await handleFoodApi(request, env);
         }
 
-        // 没带 Key 的 GET / 大概率是访问首页
-        // 直接交还给静态站点
-        if (method === "GET") {
-          return serveStatic();
-        }
+        // 没有密码要求时，直接处理 /food 云端存储
+        return await handleFoodApi(request, env);
       }
 
       // ========= 2) 账本 API：/ledger/... =========
