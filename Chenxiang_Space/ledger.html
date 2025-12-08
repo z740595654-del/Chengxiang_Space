@@ -373,6 +373,7 @@
           ></div>
         </div>
       </div>
+      <div class="label" id="lblPaceText"></div>
     </div>
 
     <!-- 消费博弈 -->
@@ -1190,6 +1191,31 @@
       ).innerText = `¥${totalSpent.toFixed(
         2
       )} / ¥${budgetTotal.toFixed(2)} (${budgetPct}%)`;
+
+      // 时间与花费对比文案
+      const paceTextEl = document.getElementById("lblPaceText");
+      let paceText = "";
+      if (daysTotal > 0 && budgetTotal > 0) {
+        const dailyBudget = budgetTotal / daysTotal;
+        if (dailyBudget > 0) {
+          const theoreticalSpent = dailyBudget * daysPassed;
+          const diff = theoreticalSpent - totalSpent;
+          if (diff >= 0) {
+            const aheadAmount = diff;
+            const aheadDays = aheadAmount / dailyBudget;
+            const aheadDaysDisplay = aheadDays.toFixed(1);
+            const aheadAmountDisplay = aheadAmount.toFixed(2);
+            paceText = `你已跑赢时间约 ${aheadDaysDisplay} 天 ≈ 省下 ${aheadAmountDisplay} 元`;
+          } else {
+            const behindAmount = -diff;
+            const behindDays = behindAmount / dailyBudget;
+            const behindDaysDisplay = behindDays.toFixed(1);
+            const behindAmountDisplay = behindAmount.toFixed(2);
+            paceText = `你已超前花费约 ${behindDaysDisplay} 天 ≈ 多花了 ${behindAmountDisplay} 元`;
+          }
+        }
+      }
+      paceTextEl.innerText = paceText;
 
       renderKeyMetrics(bData);
       renderBigPurchases(ledgerBBase);
