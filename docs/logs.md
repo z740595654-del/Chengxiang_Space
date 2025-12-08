@@ -88,3 +88,19 @@
 - 修改点：在 `/leads` 查询时新增 `start` 参数支持，前端生成 20 条时自动以 start=1 与 start=11 拉取两页并按域名去重，下载 CSV 固定 6 列顺序；为预检请求补充 OPTIONS CORS 响应。
 - 风险点：Google Custom Search API 免费额度有限，频繁查询可能遇到配额或计费；网站去重依赖域名，若同域有多品牌会被合并；enrich 正则抓取可能因反爬或页面结构差异失败。
 - 建议：部署前在 Worker 设置好 `GOOGLE_API_KEY` 与 `GOOGLE_CSE_ID`，并在前端替换 `WORKER_BASE`；首次使用时分别测试 Generate 10/20 与 CSV 下载，观察 Google API 是否命中配额限制；如需更精细的联系人挖掘，可在 Worker 中追加更复杂的解析逻辑。
+
+## 2025-12-08 17:09 北京时间
+- 操作：将干饭转盘与账本的 Cloudflare Worker 访问域名改为 `food-sync.740595654.workers.dev`，并为 Lead Finder 去除末尾斜杠以避免双斜杠路径导致 404。
+- 新增点：无。
+- 删除点：无。
+- 修改点：更新 `WORKER_URL`、`LEDGER_API_BASE` 与 `WORKER_BASE` 的域名配置，确保 API 请求直连部署中的 Worker 实例，避免旧域名失效或路径拼接异常引发的 failed to fetch/404。
+- 风险点：新域名依赖 Cloudflare Worker 部署可用性，若未发布或凭证缺失依旧会返回错误；前端缓存的旧文件可能需强制刷新以生效。
+- 建议：部署后在浏览器控制台验证干饭转盘与 Lead Finder 的请求状态码为 200，必要时清理缓存或确认 Worker 域名、密钥配置正确。
+
+## 2025-12-08 17:13 北京时间
+- 操作：恢复干饭转盘与账本的 Worker 域名为 `https://czbpght.cn`，确保继续使用既有的 food-sync 配置。
+- 新增点：无。
+- 删除点：无。
+- 修改点：`WORKER_URL` 与 `LEDGER_API_BASE` 回滚至 `czbpght.cn` 域名，保持转盘同步和账本接口与现有域名一致。
+- 风险点：若 `czbpght.cn` 域名后续迁移或证书异常，可能再次出现请求失败；需要确认前端缓存及时更新到旧域名。
+- 建议：刷新页面后复测转盘同步与账本读写，确认跨域与 TLS 正常；若未来切换域名，应同步更新前端配置并验证。
