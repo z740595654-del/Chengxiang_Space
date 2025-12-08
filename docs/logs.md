@@ -64,3 +64,11 @@
 - 建议：验证账期不同阶段（初期、中段、已结束）显示的天数与金额是否符合实际预期，如需占位提示可后续补充。
 - 原计算逻辑：宏观竞速仅展示时间与预算进度条，无相对节奏的文案提示。
 - 改动后逻辑：按 dailyBudget = totalBudget / totalDays、theoreticalSpent = dailyBudget * daysPassed、diff = theoreticalSpent - totalSpent 计算；diff≥0 显示“跑赢时间”并取 aheadDays = diff/dailyBudget、aheadAmount = diff；diff<0 显示“超前花费”并取 behindDays = -diff/dailyBudget、behindAmount = -diff，均四舍五入到 1 位天数、2 位金额后拼接文案。
+
+## 2025-12-08 15:11 北京时间
+- 操作：强化宏观竞速节奏提示的展示样式，增加显眼的色块与状态圆点，并在无数据时隐藏文案行。
+- 新增点：新增 pace-chip 样式与 ahead/behind 状态色，文案旁展示状态圆点及渐变背景以突出领先/落后信息。
+- 删除点：无。
+- 修改点：文案容器由普通 label 改为支持状态类名与显隐控制的色块，逻辑在生成文案后追加对应类名并控制 display。
+- 风险点：颜色更醒目但仍依赖浏览器的主题适配，若未来调整主题色需确认渐变和文字对比度。
+- 建议：联调实际数据验证领先与落后状态下的视觉效果，必要时可根据主题细调色值以确保可读性。
