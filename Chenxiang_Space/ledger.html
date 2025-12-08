@@ -100,6 +100,47 @@
     .warning {
       color: var(--red);
     }
+    .pace-chip {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--input-border);
+      font-weight: 800;
+      font-size: 1rem;
+      line-height: 1.45;
+      letter-spacing: 0.05px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
+      color: var(--text);
+      text-shadow: none;
+      -webkit-font-smoothing: antialiased;
+      font-smooth: always;
+    }
+    .pace-chip .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.03);
+    }
+    .pace-chip.ahead {
+      display: inline-flex;
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.05));
+      border-color: rgba(34, 197, 94, 0.55);
+    }
+    .pace-chip.ahead .dot {
+      background: var(--green);
+    }
+    .pace-chip.behind {
+      display: inline-flex;
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05));
+      border-color: rgba(239, 68, 68, 0.55);
+    }
+    .pace-chip.behind .dot {
+      background: var(--red);
+    }
     input,
     select,
     textarea {
@@ -372,6 +413,10 @@
             style="background: var(--green); width: 0%"
           ></div>
         </div>
+      </div>
+      <div class="pace-chip" id="lblPaceText">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="text"></span>
       </div>
     </div>
 
@@ -1190,6 +1235,39 @@
       ).innerText = `¥${totalSpent.toFixed(
         2
       )} / ¥${budgetTotal.toFixed(2)} (${budgetPct}%)`;
+
+      // 时间与花费对比文案
+      const paceTextEl = document.getElementById("lblPaceText");
+      const paceTextSpan = paceTextEl.querySelector(".text");
+      let paceText = "";
+      let paceState = "";
+      if (daysTotal > 0 && budgetTotal > 0) {
+        const dailyBudget = budgetTotal / daysTotal;
+        if (dailyBudget > 0) {
+          const theoreticalSpent = dailyBudget * daysPassed;
+          const diff = theoreticalSpent - totalSpent;
+          if (diff >= 0) {
+            const aheadAmount = diff;
+            const aheadDays = aheadAmount / dailyBudget;
+            const aheadDaysDisplay = aheadDays.toFixed(1);
+            const aheadAmountDisplay = aheadAmount.toFixed(2);
+            paceText = `你已跑赢时间约 ${aheadDaysDisplay} 天 ≈ 省下 ${aheadAmountDisplay} 元`;
+            paceState = "ahead";
+          } else {
+            const behindAmount = -diff;
+            const behindDays = behindAmount / dailyBudget;
+            const behindDaysDisplay = behindDays.toFixed(1);
+            const behindAmountDisplay = behindAmount.toFixed(2);
+            paceText = `你已超前花费约 ${behindDaysDisplay} 天 ≈ 多花了 ${behindAmountDisplay} 元`;
+            paceState = "behind";
+          }
+        }
+      }
+      paceTextSpan.innerText = paceText;
+      paceTextEl.className = paceText
+        ? `pace-chip ${paceState}`
+        : "pace-chip";
+      paceTextEl.style.display = paceText ? "inline-flex" : "none";
 
       renderKeyMetrics(bData);
       renderBigPurchases(ledgerBBase);
