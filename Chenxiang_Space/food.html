@@ -242,6 +242,8 @@
     // ================= 配置区 =================
     // 你的新域名
     const WORKER_URL = "https://czbpght.cn/food";
+    // 若后端设置了 FOOD_API_KEY/FOOD_PASSWORD，这里填上对应的密码
+    const FOOD_API_KEY = "";
 
     // ================= 数据核心 =================
     const DB_NAME = 'FoodWheel_Cloud_V7';
@@ -319,8 +321,10 @@
         try {
             // 注意：这里不需要传 userId 参数了，后端会自动默认为 1
             let res;
+            const authHeaders = FOOD_API_KEY ? { "X-Custom-Auth": FOOD_API_KEY } : {};
+
             try {
-                res = await fetch(WORKER_URL + "?t=" + Date.now(), { method: 'GET' });
+                res = await fetch(WORKER_URL + "?t=" + Date.now(), { method: 'GET', headers: authHeaders });
             } catch (netErr) {
                 throw new Error("无法连接云端(" + (netErr.message || netErr) + ")");
             }
@@ -388,6 +392,7 @@
             try {
                 putRes = await fetch(WORKER_URL, {
                     method: 'PUT',
+                    headers: authHeaders,
                     body: JSON.stringify(localData)
                 });
             } catch (netErr) {
