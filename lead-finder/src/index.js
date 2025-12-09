@@ -362,7 +362,7 @@ async function handleEnrich(url) {
 
     try {
         const detail = await enrichSingle(website, lang, country);
-        return jsonResponse({ ok: true, result: detail });
+        return jsonResponse({ ok: true, result: detail, ...detail });
     } catch (err) {
         console.error("enrich error", err);
         return jsonResponse({ ok: false, message: err.message || "enrich failed" }, 500);

@@ -214,6 +214,7 @@
   </div>
 
   <script>
+    const API_BASE = "https://lead-finder.740595654.workers.dev";
     const tbody = document.getElementById('tbody');
     const startBtn = document.getElementById('startBtn');
     const exportBtn = document.getElementById('exportBtn');
@@ -269,7 +270,7 @@
       setStage('发起搜索...');
 
       try {
-        const resp = await fetch(`/api/leads?q=${encodeURIComponent(q)}&country=${encodeURIComponent(country)}&limit=${encodeURIComponent(limit)}&mode=dealer&lang=auto&enrich=0`);
+        const resp = await fetch(`${API_BASE}/api/leads?q=${encodeURIComponent(q)}&country=${encodeURIComponent(country)}&limit=${encodeURIComponent(limit)}&mode=dealer&lang=auto&enrich=0`);
         const data = await resp.json();
         if (!data.ok) throw new Error(data.message || '接口异常');
         leads = data.results || [];
@@ -302,11 +303,12 @@
           if (idx === undefined) break;
           const lead = list[idx];
           try {
-            const res = await fetch(`/enrich?website=${encodeURIComponent(lead.website)}&lang=${encodeURIComponent('auto')}&country=${encodeURIComponent(country)}`);
+            const res = await fetch(`${API_BASE}/enrich?website=${encodeURIComponent(lead.website)}&lang=${encodeURIComponent('auto')}&country=${encodeURIComponent(country)}`);
             const data = await res.json();
-            if (data.ok && data.result) {
-              lead.phone = data.result.phone || lead.phone;
-              lead.email = data.result.email || lead.email;
+            if (data.ok) {
+              const detail = data.result || data;
+              lead.phone = detail.phone || data.phone || lead.phone;
+              lead.email = detail.email || data.email || lead.email;
             }
           } catch (e) {
             console.warn('enrich failed', lead.website, e);
