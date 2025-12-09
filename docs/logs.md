@@ -225,7 +225,7 @@
 - 新增点：
   - 后端新增渠道优先模板、多语言自动选择、分批 Google CSE 拉取与 OEM 域名黑名单过滤；增加 score/tags/meta、/enrich 多语言抓取与邮箱电话评分，并支持 enrich 批量补全。
   - 前端 leads.html 重写为浏览器端页面，包含进度条、阶段文案、并发逐条补全和 CSV 导出，默认 dealer 模式自动调用 /api/leads 与 /enrich。
-  - meta 输出统计 raw/filtered/enriched，CORS 与 404 统一化。
+  - meta 输出字段 totalItems/uniqueDomains/filteredByBlacklist/filteredByScore/kept，CORS 与 404 统一化。
 - 删除点：移除 leads.html 中的 Worker 入口与 Env 依赖，避免被 Pages 作为静态文本暴露。
 - 修改点：
   - 路由支持 /api/leads、/leads、/enrich 及 OPTIONS 204；参数兼容 q/keyword、limit/num、country、start、mode、lang、enrich。
@@ -236,3 +236,15 @@
 - 原计算/逻辑：旧版仅单一查询、无渠道模板、无 OEM 过滤、无 score 与 enrich 批量补全；leads.html 为 Worker 风格 JS 被 Pages 直接展示源码。
 - 改动后计算/逻辑：dealer 模式查询 = (渠道模板 OR 组合)+用户词+国家，支持两批拉取；结果打分并过滤 OEM 与低分，必要时再逐条 /enrich 抓取联系页并给出邮箱/电话评分；leads.html 仅做前端渲染与并发补全，不再包含 Worker 逻辑。
 - 事件原因说明：Pages 会将 /leads 路径映射到 /leads.html，原文件是 Worker JS，因此被静态方式直接展示源码；现已通过前端 HTML 重写解决。
+
+## 2025-12-10 15:00 北京时间
+- 操作：更新 Lead Finder 升级日志描述，去除旧的 meta raw/filtered/enriched 命名，并明确当前契约下的 meta 统计与 enrich 占位规则。
+- 新增点：
+  - 说明 /api/leads 与 /leads 统一返回 meta: totalItems、uniqueDomains、filteredByBlacklist、filteredByScore、kept，且 enrich=0 时 phone/email 固定为空字符串。
+  - 细化 filteredByBlacklist 仅统计命中域名后缀黑名单的剔除数，filteredByScore 统计所有因评分阈值淘汰的条目（含 OEM 关键词扣分导致的低分）。
+- 删除点：移除“meta 输出统计 raw/filtered/enriched”表述，避免与现行字段命名冲突。
+- 修改点：将日志中的 meta 描述改为当前字段命名及归因说明，强调两条路由共用同一统计口径和占位规则。
+- 风险点：文档更新需确保后端实现与描述一致，若未来调整统计逻辑需同步修改日志以免误导使用方。
+- 建议：发布后复核 /api/leads 与 /leads 的实际响应，确认 meta 统计与 phone/email 占位符合文档，持续关注 OEM 关键词扣分是否导致过度筛减。
+- 原计算/逻辑描述：日志中曾使用 raw/filtered/enriched 描述 meta 统计，并未区分黑名单过滤与评分淘汰的归因，未明确 enrich=0 时的电话/邮箱占位。
+- 改动后计算/逻辑描述：meta 字段采用 totalItems（原始数量）、uniqueDomains（去重域名）、filteredByBlacklist（命中域名黑名单的剔除数）、filteredByScore（低于阈值的剔除数，含 OEM 关键词扣分导致的低分）、kept（最终保留）；enrich=0 保持 phone/email 为空字符串，两条路由统一遵循该口径。
