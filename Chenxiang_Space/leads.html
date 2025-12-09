@@ -326,7 +326,7 @@
     function exportCSV() {
       if (!leads.length) return;
       const header = ['country', 'company', 'website', 'city', 'phone', 'email'];
-      const rows = leads.map((r) => header.map((h) => (r[h] || '')).join(','));
+      const rows = leads.map((r) => header.map((h) => escapeCsv(r[h] || '')).join(','));
       const csv = [header.join(','), ...rows].join('\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
@@ -335,6 +335,14 @@
       a.download = 'leads.csv';
       a.click();
       URL.revokeObjectURL(url);
+    }
+
+    function escapeCsv(value) {
+      const str = String(value ?? '');
+      if (/[",\n]/.test(str)) {
+        return '"' + str.replace(/"/g, '""') + '"';
+      }
+      return str;
     }
 
     startBtn.addEventListener('click', fetchLeads);

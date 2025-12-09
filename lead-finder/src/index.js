@@ -148,7 +148,6 @@ async function handleLeads(url, env) {
     try {
         const rawItems = await performSearch(searchQueries, limit, start, env);
         const transformed = [];
-        const domainSet = new Set();
         const meta = {
             totalItems: rawItems.length,
             uniqueDomains: 0,
@@ -165,9 +164,6 @@ async function handleLeads(url, env) {
                 continue;
             }
             const lead = parsed.lead;
-            if (lead?.website) {
-                domainSet.add(lead.website.toLowerCase());
-            }
             if (mode === "dealer" && lead.score < DEALER_SCORE_THRESHOLD) {
                 meta.filteredByScore += 1;
                 continue;
@@ -182,7 +178,11 @@ async function handleLeads(url, env) {
         }
 
         meta.kept = results.length;
-        meta.uniqueDomains = domainSet.size;
+        meta.uniqueDomains = new Set(
+            results
+                .map((r) => (r.website || "").toLowerCase())
+                .filter((v) => v)
+        ).size;
 
         return jsonResponse({ ok: true, results, meta });
     } catch (err) {
@@ -290,6 +290,7 @@ function isBlockedDomain(hostname) {
 
 function computeScore(text, website, mode) {
     const lower = text.toLowerCase();
+    const hostLower = website.toLowerCase();
     let score = 10;
 
     const positive = ["dealer", "distributor", "rental", "service", "parts", "used forklift", "warehouse"];
@@ -300,8 +301,9 @@ function computeScore(text, website, mode) {
     if (lower.includes("forklift") || lower.includes("mhe")) score += 15;
     if (lower.includes("contact") || lower.includes("contacto") || lower.includes("kontakt")) score += 6;
 
-    if (OEM_KEYWORDS.some((kw) => website.toLowerCase().includes(kw) || lower.includes(kw))) {
-        score -= 40;
+    const oemHit = OEM_KEYWORDS.some((kw) => hostLower.includes(kw) || lower.includes(kw));
+    if (oemHit) {
+        score -= 28;
     }
 
     if (mode === "dealer") score += 5;
