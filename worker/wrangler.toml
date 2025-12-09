@@ -3,7 +3,9 @@ main = "src/index.js"
 compatibility_date = "2025-12-05"
 keep_vars = true
 
-routes = ["czbpght.cn/food*"]
+routes = [
+  { pattern = "czbpght.cn/food*" },
+]
 
 [assets]
 directory = "../Chenxiang_Space"
