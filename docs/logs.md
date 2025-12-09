@@ -146,3 +146,13 @@
 - 建议：部署后分别访问 https://czbpght.cn/food（应返回 JSON）与 https://czbpght.cn/food.html（应展示转盘），并在前端点击同步确认不再出现 Failed to fetch。
 - 原逻辑：请求首先按 Accept 等条件识别为 HTML 时直接走静态资源，导致浏览器访问 /food 被映射到 food.html，API 无法返回 JSON。
 - 改动后逻辑：/food 或 /food/ 请求优先进入 Food API（校验密钥后处理 GET/PUT，否则返回 405），静态资源分流仅在 API 与 ledger 之外执行，避免 /food 被错误重写。
+
+## 2025-12-09 10:11 北京时间
+- 操作：移除 Worker 静态资产绑定并新增数据域护栏逻辑，限定 czbpght.cn 仅承载 /food(/data) 与 /ledger API；同步更新前端 WORKER_URL 指向 /food/data，保持兼容 /food；将通用 JSON 响应与 CORS 头统一化。
+- 新增点：DATA_ONLY_HOSTS 白名单控制非数据路径返回 JSON 404；新增 /food/data 路径判定与 handleFoodApi 复用；jsonResp 统一输出含 CORS 头。
+- 删除点：wrangler.toml 中 [assets] 配置移除，防止静态资源回落抢占 API。
+- 修改点：路由流程在数据域下仅放行 Food/ledger API，其余直接返回 JSON；前端同步基址切换到 /food/data；CORS 允许 PUT/DELETE 并对预检统一返回。
+- 风险点：移除静态资产绑定后，若仍需通过 Worker 提供 HTML 将返回 404；jsonResp 的 CORS 头精简可能与某些自定义 Header 不兼容。
+- 建议：发布后验证 https://czbpght.cn/food 与 /food/data 均返回 JSON，随机路径返回 JSON 404，ledger 相关接口正常；如有额外自定义头需求，可在 CORS 配置中补充。
+- 原计算/逻辑：数据域与非数据域统一路径处理，/food 判定后若未匹配则可能回退到静态站点；静态资产绑定可能拦截 API。
+- 改动后逻辑：当请求 host 属于 DATA_ONLY_HOSTS 时仅处理 /food、/food/、/food/data 与 /ledger*，其他一律 JSON 404；/food 与 /food/data 共用 handleFoodApi，其他 host 保持原 API 与透传行为且不再尝试静态回落。

@@ -8,10 +8,6 @@ routes = [
   "czbpght.cn/ledger*"
 ]
 
-
-[assets]
-directory = "../Chenxiang_Space"
-
 [[d1_databases]]
 binding = "MY_DB"
 database_name = "food-db"
