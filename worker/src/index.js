@@ -1,5 +1,6 @@
 const LEDGER_PREFIX = "/ledger";
 const FOOD_PATH = "/food";
+const DATA_ONLY_HOSTS = new Set(["czbpght.cn", "www.czbpght.cn"]);
 // build test
 
 // 兼容你现有前端的默认值
@@ -9,22 +10,27 @@ const DEFAULT_FOOD_API_KEY = "";
 function corsHeaders(extra = {}) {
   return {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,PUT,POST,DELETE,OPTIONS",
     "Access-Control-Allow-Headers":
       "Content-Type, X-Custom-Auth, x-ledger-key, X-Ledger-Key",
     ...extra,
   };
 }
 
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
+function jsonResp(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
     status,
     headers: {
-      "Content-Type": "application/json;charset=utf-8",
-      ...corsHeaders(),
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,PUT,POST,DELETE,OPTIONS",
+      "Access-Control-Allow-Headers":
+        "Content-Type, X-Custom-Auth, x-ledger-key, X-Ledger-Key",
     },
   });
 }
+
+const json = jsonResp;
 
 function getLedgerPassword(env) {
   return (
@@ -67,12 +73,11 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
+    const hostname = url.hostname;
     const method = request.method.toUpperCase();
 
-    const serveStatic = () => {
-      if (env?.ASSETS) return env.ASSETS.fetch(request);
-      return fetch(request);
-    };
+    const isFoodDataPath = path === "/food/data";
+    const isFoodCompatPath = path === FOOD_PATH || path === `${FOOD_PATH}/`;
 
     // CORS 预检
     if (method === "OPTIONS") {
@@ -83,90 +88,103 @@ export default {
     }
 
     try {
-      const isFoodPath = path === FOOD_PATH || path === `${FOOD_PATH}/`;
+      const isFoodPath = isFoodDataPath || isFoodCompatPath;
 
-      // ========= 1) 吃饭转盘云端 API（仅 /food 路径） =========
-      // 只有带 X-Custom-Auth 才认为是 API 调用
-      const foodKey =
-        request.headers.get("X-Custom-Auth") ||
-        request.headers.get("x-custom-auth");
+      const handleFoodRequest = async () => {
+        const foodKey =
+          request.headers.get("X-Custom-Auth") ||
+          request.headers.get("x-custom-auth");
 
-      if (isFoodPath) {
         if (method === "GET" || method === "PUT") {
           const expect = getFoodApiKey(env);
-          if (expect) {
-            if (foodKey !== expect) {
-              return json({ ok: false, error: "Forbidden" }, 403);
-            }
-            return await handleFoodApi(request, env);
+          if (expect && foodKey !== expect) {
+            return jsonResp({ ok: false, error: "Forbidden" }, 403);
           }
-
-          // 没有密码要求时，直接处理 /food 云端存储
           return await handleFoodApi(request, env);
         }
 
-        return new Response("Method Not Allowed", {
-          status: 405,
-          headers: corsHeaders(),
-        });
+        return jsonResp({ ok: false, error: "Method Not Allowed" }, 405);
+      };
+
+      const isDataOnlyHost = DATA_ONLY_HOSTS.has(hostname);
+
+      if (isDataOnlyHost) {
+        if (isFoodPath) {
+          return await handleFoodRequest();
+        }
+
+        if (path.startsWith(LEDGER_PREFIX)) {
+          return await handleLedgerRequest({
+            path,
+            method,
+            url,
+            env,
+            request,
+          });
+        }
+
+        return jsonResp({ ok: false, error: "Not found" }, 404);
+      }
+      // ========= 1) 吃饭转盘云端 API（仅 /food 路径） =========
+      if (isFoodPath) {
+        return await handleFoodRequest();
       }
 
       // ========= 2) 账本 API：/ledger/... =========
       if (path.startsWith(LEDGER_PREFIX)) {
-        const ledgerPwd = getLedgerPassword(env);
-
-        const headerKey =
-          request.headers.get("x-ledger-key") ||
-          request.headers.get("X-Ledger-Key");
-
-        if (ledgerPwd && headerKey !== ledgerPwd) {
-          return json({ ok: false, error: "Unauthorized" }, 401);
-        }
-
-        await ensureLedgerSchema(env);
-
-        const subPath = path.slice(LEDGER_PREFIX.length) || "/";
-
-        if (method === "GET" && subPath === "/transactions") {
-          return await handleGetTransactions(url, env);
-        }
-
-        if (method === "POST" && subPath === "/transactions") {
-          return await handlePostTransaction(request, env);
-        }
-
-        if (method === "DELETE" && subPath.startsWith("/transactions/")) {
-          const parts = subPath.split("/");
-          const tx_id = parts[2];
-          return await handleDeleteTransaction(tx_id, env);
-        }
-
-        if (method === "GET" && subPath === "/logs") {
-          return await handleGetLogs(url, env);
-        }
-
-        if (method === "GET" && subPath === "/export") {
-          return await handleExportCsv(env);
-        }
-
-        return new Response("Not found", {
-          status: 404,
-          headers: corsHeaders(),
-        });
+        return await handleLedgerRequest({ path, method, url, env, request });
       }
 
-      // ========= 3) 其他路径全部放行给静态站点 =========
-      if (env?.ASSETS) {
-        return serveStatic();
-      }
-
+      // ========= 3) 其他路径直接透传 =========
       return fetch(request);
     } catch (e) {
       const msg = e && e.message ? e.message : String(e);
-      return json({ ok: false, error: "Server Error: " + msg }, 500);
+      return jsonResp({ ok: false, error: "Server Error: " + msg }, 500);
     }
   },
 };
+
+async function handleLedgerRequest({ path, method, url, env, request }) {
+  const ledgerPwd = getLedgerPassword(env);
+
+  const headerKey =
+    request.headers.get("x-ledger-key") || request.headers.get("X-Ledger-Key");
+
+  if (ledgerPwd && headerKey !== ledgerPwd) {
+    return json({ ok: false, error: "Unauthorized" }, 401);
+  }
+
+  await ensureLedgerSchema(env);
+
+  const subPath = path.slice(LEDGER_PREFIX.length) || "/";
+
+  if (method === "GET" && subPath === "/transactions") {
+    return await handleGetTransactions(url, env);
+  }
+
+  if (method === "POST" && subPath === "/transactions") {
+    return await handlePostTransaction(request, env);
+  }
+
+  if (method === "DELETE" && subPath.startsWith("/transactions/")) {
+    const parts = subPath.split("/");
+    const tx_id = parts[2];
+    return await handleDeleteTransaction(tx_id, env);
+  }
+
+  if (method === "GET" && subPath === "/logs") {
+    return await handleGetLogs(url, env);
+  }
+
+  if (method === "GET" && subPath === "/export") {
+    return await handleExportCsv(env);
+  }
+
+  return new Response("Not found", {
+    status: 404,
+    headers: corsHeaders(),
+  });
+}
 
 /* ========== 干饭转盘后端：单表 JSON 存储 ========== */
 
