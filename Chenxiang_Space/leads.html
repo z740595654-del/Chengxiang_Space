@@ -215,6 +215,7 @@
 
   <script>
     const API_BASE = "https://lead-finder.740595654.workers.dev";
+    // 手测 Pages： https://food-spin.pages.dev/leads
     const tbody = document.getElementById('tbody');
     const startBtn = document.getElementById('startBtn');
     const exportBtn = document.getElementById('exportBtn');
@@ -270,13 +271,30 @@
       setStage('发起搜索...');
 
       try {
-        const resp = await fetch(`${API_BASE}/api/leads?q=${encodeURIComponent(q)}&country=${encodeURIComponent(country)}&limit=${encodeURIComponent(limit)}&mode=dealer&lang=auto&enrich=0`);
-        const data = await resp.json();
+        const dealerUrl = `${API_BASE}/api/leads?q=${encodeURIComponent(q)}&country=${encodeURIComponent(country)}&limit=${encodeURIComponent(limit)}&mode=dealer&lang=auto&enrich=0`;
+        const dealerResp = await fetch(dealerUrl);
+        let data = await dealerResp.json();
+        let usedMode = 'dealer';
+
+        if (data.ok && (!data.results || data.results.length === 0)) {
+          setStage('经销商结果为空，尝试降级为 raw...');
+          const rawUrl = `${API_BASE}/api/leads?q=${encodeURIComponent(q)}&country=${encodeURIComponent(country)}&limit=${encodeURIComponent(limit)}&mode=raw&lang=auto&enrich=0`;
+          const rawResp = await fetch(rawUrl);
+          const rawData = await rawResp.json();
+          if (!rawData.ok) throw new Error(rawData.message || 'raw 模式接口异常');
+          data = rawData;
+          usedMode = 'raw';
+        }
+
         if (!data.ok) throw new Error(data.message || '接口异常');
         leads = data.results || [];
         renderRows(leads);
-        statusText.textContent = `基础完成 (${leads.length} 条)`;
-        setStage('逐条补全联系方式...');
+        statusText.textContent = usedMode === 'dealer' ? `基础完成 (${leads.length} 条)` : `基础完成 (${leads.length} 条，raw 降级)`;
+        const thresholdHint =
+          usedMode === 'dealer' && data.meta && typeof data.meta.usedScoreThreshold !== 'undefined'
+            ? `（本次阈值=${data.meta.usedScoreThreshold}）`
+            : '';
+        setStage(`逐条补全联系方式...${thresholdHint}`);
         await enrichAll(leads, country);
       } catch (err) {
         console.error(err);

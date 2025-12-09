@@ -147,6 +147,21 @@
 - 原逻辑：请求首先按 Accept 等条件识别为 HTML 时直接走静态资源，导致浏览器访问 /food 被映射到 food.html，API 无法返回 JSON。
 - 改动后逻辑：/food 或 /food/ 请求优先进入 Food API（校验密钥后处理 GET/PUT，否则返回 405），静态资源分流仅在 API 与 ledger 之外执行，避免 /food 被错误重写。
 
+## 2025-12-09 06:48 北京时间
+- 操作：扩充 Lead Finder 评分关键词与叉车术语并为非英文经销商请求降级阈值，同时前端 dealer 为空时自动降级 raw 以回填基础列表。
+- 新增点：
+  - computeScore 支持西/葡/德/法语的 dealer、租赁、服务、配件及叉车同义词，forklift/MHE 检测同步扩容多语言术语。
+  - handleLeads 在 mode=dealer 且自动识别的非英文场景下采用 28 的温和阈值，避免多语言市场被误杀；添加手测 API 注释。
+  - leads.html 在 dealer 拉取为空时自动重试 raw 模式，并提示 raw 降级完成；补充 Pages 手测链接注释。
+- 删除点：无。
+- 修改点：前端抓取流程增加自动降级分支，基础结果展示与补全流程保持原有 CSV 转义与 enrich 兼容逻辑。
+- 风险点：
+  - 多语言关键词放宽可能让部分非目标站点得分偏高，需关注评分分布；非英文阈值降低可能引入少量无关结果。
+  - 前端自动降级 raw 可能返回未筛分的基础搜索结果，需在补全后人工甄别质量。
+- 建议：使用西语样例 /api/leads?q=forklift&country=Spain&limit=10&mode=dealer&lang=auto&enrich=0 验证 meta.kept>0，访问 https://food-spin.pages.dev/leads 确认 dealer 为空时能降级展示 raw 基础列表。
+- 原计算/逻辑：dealer 评分关键词主要为英文，叉车检测仅限 “forklift”/"mhe"，评分阈值固定 35；前端仅请求 dealer，空结果不降级。
+- 改动后计算/逻辑：dealer 评分涵盖西/葡/德/法关键词与多语言叉车术语，阈值按语言区分为英文 35、非英文 28；前端 dealer 为空自动切换 raw 并沿用 enrich 协议，确保用户可见基础结果。
+
 ## 2025-12-09 10:11 北京时间
 - 操作：移除 Worker 静态资产绑定并新增数据域护栏逻辑，限定 czbpght.cn 仅承载 /food(/data) 与 /ledger API；同步更新前端 WORKER_URL 指向 /food/data，保持兼容 /food；将通用 JSON 响应与 CORS 头统一化。
 - 新增点：DATA_ONLY_HOSTS 白名单控制非数据路径返回 JSON 404；新增 /food/data 路径判定与 handleFoodApi 复用；jsonResp 统一输出含 CORS 头。
@@ -198,8 +213,23 @@
   - 仍依赖有效的 GOOGLE_API_KEY 与 GOOGLE_CSE_ID；外部站点反爬或页面格式异常可能导致单条邮箱/电话抓取失败。
 - 建议：
   - 部署后分别访问 /api/leads 与 /leads（含 q/keyword、limit/num、start 组合）验证返回结构；确认前端 leads.html 点击“开始抓取”不再出现 404。
-- 原计算/逻辑：仅 /api/leads 路由，参数只识别 q 与 limit（上限 20），未处理 keyword/num/start，404 发生在 /leads 请求；响应结构已为 { ok:true, results }。
-- 改动后计算/逻辑：/api/leads 与 /leads 共用处理器，接受 q 或 keyword、limit 或 num（上限 10）、可选 country 与 start，缺参返回 400；保持 Google CSE 搜索并抓取最多 2 页联系方式，统一 CORS/404 响应，/enrich 返回占位 JSON。
+
+## 2025-12-09 15:00 北京时间
+- 操作：调整 Lead Finder dealer 评分阈值与词库，优化英文市场（含北美）线索不过度过滤，并为空结果增加兜底阈值与前端阈值提示。
+- 新增点：
+  - 在 meta 可选返回 usedScoreThreshold 与 fallbackScoreThresholdApplied，若 dealer 初筛为空会以 28 的兜底阈值重筛一次。
+  - computeScore 英文正向词库扩充（lift truck/material handling/warehouse equipment/industrial truck/fork truck/service center/aftermarket/maintenance 等），叉车术语也同步扩充。
+  - 前端 leads 页面在 dealer 模式时显示本次阈值提示，便于观察阈值是否放宽。
+- 删除点：无。
+- 修改点：
+  - 英文 dealer 阈值从 35 下调到 30，dealer 基础分从 10 提升至 18，保持非英文阈值 28 不变；逻辑新增兜底过滤以防 meta.totalItems>0 但 kept=0。
+  - 评分逻辑改动：
+    - 原逻辑：score 初始 10，dealer 加 5，英文阈值 35；筛选仅使用单一阈值，空结果不回退。
+    - 现逻辑：dealer 初始 18，保留 OEM 扣分与加分结构；英文阈值 30，非英文 28，如 primary 筛选全灭且仍有候选则用 28 再筛一次，并在 meta.usedScoreThreshold/fallbackScoreThresholdApplied 标注。
+- 风险点：
+  - 阈值下调与词库扩容可能引入少量噪声站点，需要观察 kept/质量是否平衡；fallback 阈值在极端噪声结果时会放行更多低分项。
+- 建议：
+  - 用 /api/leads?q=forklift&country=United%20States&limit=10&mode=dealer&lang=auto&enrich=0 与 /api/leads?q=forklift&country=Mexico&limit=10&mode=dealer&lang=auto&enrich=0 手测，确认 kept>0 且 meta.usedScoreThreshold 如预期；前端 https://food-spin.pages.dev/leads 观察“基础完成”阶段不再常态 0 条。
 
 ## 2025-12-10 20:30 北京时间
 - 操作：合并 Lead Finder 升级记录，修复 Pages /leads 静态路由源码泄露，前端改用 Worker 绝对地址，/enrich 响应兼容扁平与 result 包装，并确认 meta 统计口径与占位规则。
@@ -239,3 +269,21 @@
   - 原 uniqueDomains 逻辑：在评分过滤前即累加域名，可能包含被阈值淘汰的站点；现改为只对最终返回（kept）列表去重。
   - 原 OEM 扣分：命中品牌词时一次性扣 40 分；现调整为扣 28 分以减少对授权经销商域名的误伤，仍覆盖域名与正文命中。
   - CSV 原逻辑：直接拼接逗号分隔；现遇逗号/引号/换行时包裹双引号并转义双引号。
+
+## 2025-12-12 11:30 北京时间
+- 操作：修正 Lead Finder dealer fallback 统计口径与元数据可解释性，并调整日志时序以便审计。
+- 新增点：
+  - dealer 模式 meta 稳定返回 usedScoreThreshold 与 fallbackScoreThresholdApplied，默认 fallback 标记为 false，实际应用兜底时标记 true 并回传最终阈值。
+- 删除点：无。
+- 修改点：
+  - filteredByScore 在 dealer 触发兜底且放行结果时按最终结果口径重算（candidates-length），未触发时保持 primary 口径，确保淘汰计数与最终 kept 对齐。
+  - 调整 2025-12-09 06:48 日志段落至正确时间位置，维持时间顺序阅读。
+- 风险点：
+  - filteredByScore 改为依据最终结果计算可能与旧报表存在轻微差异，需要同步说明统计基准变动。
+- 建议：
+  - 手动验证 dealer 场景 primary 有/无结果两种情况下 meta.usedScoreThreshold 与 fallbackScoreThresholdApplied 输出符合预期，filteredByScore 与 kept 对齐。
+- 原计算/逻辑：
+  - filteredByScore 始终以 primary 阈值筛选结果计算淘汰数，fallback 放行不会修正淘汰计数，fallback 标记可能缺省。
+- 改动后计算/逻辑：
+  - dealer fallback 生效时以最终放行结果重算淘汰数，fallback 未生效沿用 primary 口径；meta.usedScoreThreshold=最终阈值，fallbackScoreThresholdApplied 显式标记是否使用兜底。
+

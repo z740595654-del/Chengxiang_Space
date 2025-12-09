@@ -4,7 +4,8 @@ const CORS_HEADERS = Object.freeze({
     "Access-Control-Allow-Headers": "Content-Type",
 });
 
-const DEALER_SCORE_THRESHOLD = 35;
+const EN_DEALER_THRESHOLD = 30;
+const NON_EN_DEALER_THRESHOLD = 28;
 const SEARCH_TIMEOUT_MS = 5000;
 const FETCH_TIMEOUT_MS = 4000;
 const MAX_ENRICH_CONCURRENCY = 3;
@@ -138,6 +139,17 @@ async function handleLeads(url, env) {
     const langParam = (url.searchParams.get("lang") || "auto").toLowerCase();
     const enrichEnabled = (url.searchParams.get("enrich") || "0") === "1";
     const lang = resolveLang(country, langParam);
+    const scoreThreshold =
+        mode === "dealer"
+            ? lang === "en"
+                ? EN_DEALER_THRESHOLD
+                : NON_EN_DEALER_THRESHOLD
+            : 0;
+
+    // 手测建议：
+    // - 西语：/api/leads?q=forklift&country=Spain&limit=10&mode=dealer&lang=auto&enrich=0
+    // - 英语：/api/leads?q=forklift&country=United%20States&limit=10&mode=dealer&lang=auto&enrich=0
+    // - 北美西语：/api/leads?q=forklift&country=Mexico&limit=10&mode=dealer&lang=auto&enrich=0
 
     if (!env.GOOGLE_API_KEY || !env.GOOGLE_CSE_ID) {
         return jsonResponse({ ok: false, message: "缺少 Google API 配置" }, 500);
@@ -147,7 +159,7 @@ async function handleLeads(url, env) {
 
     try {
         const rawItems = await performSearch(searchQueries, limit, start, env);
-        const transformed = [];
+        const candidates = [];
         const meta = {
             totalItems: rawItems.length,
             uniqueDomains: 0,
@@ -163,15 +175,40 @@ async function handleLeads(url, env) {
                 meta.filteredByBlacklist += 1;
                 continue;
             }
-            const lead = parsed.lead;
-            if (mode === "dealer" && lead.score < DEALER_SCORE_THRESHOLD) {
-                meta.filteredByScore += 1;
-                continue;
-            }
-            transformed.push(lead);
+            candidates.push(parsed.lead);
         }
 
-        let results = transformed.slice(0, limit);
+        let appliedThreshold = scoreThreshold;
+        let results = candidates;
+
+        if (mode === "dealer") {
+            meta.fallbackScoreThresholdApplied = false;
+            const primaryFiltered = candidates.filter((lead) => lead.score >= scoreThreshold);
+
+            let finalFiltered = primaryFiltered;
+
+            if (
+                primaryFiltered.length === 0 &&
+                candidates.length > 0 &&
+                scoreThreshold > NON_EN_DEALER_THRESHOLD
+            ) {
+                const fallbackFiltered = candidates.filter((lead) => lead.score >= NON_EN_DEALER_THRESHOLD);
+                if (fallbackFiltered.length > 0) {
+                    finalFiltered = fallbackFiltered;
+                    appliedThreshold = NON_EN_DEALER_THRESHOLD;
+                    meta.fallbackScoreThresholdApplied = true;
+                }
+            }
+
+            meta.filteredByScore = meta.fallbackScoreThresholdApplied
+                ? candidates.length - finalFiltered.length
+                : candidates.length - primaryFiltered.length;
+
+            meta.usedScoreThreshold = appliedThreshold;
+            results = finalFiltered;
+        }
+
+        results = results.slice(0, limit);
 
         if (enrichEnabled && results.length) {
             results = await enrichBatch(results, lang, country);
@@ -291,14 +328,74 @@ function isBlockedDomain(hostname) {
 function computeScore(text, website, mode) {
     const lower = text.toLowerCase();
     const hostLower = website.toLowerCase();
-    let score = 10;
+    let score = mode === "dealer" ? 18 : 10;
 
-    const positive = ["dealer", "distributor", "rental", "service", "parts", "used forklift", "warehouse"];
+    const positive = [
+        "dealer",
+        "distributor",
+        "rental",
+        "service",
+        "service center",
+        "parts",
+        "aftermarket",
+        "maintenance",
+        "used forklift",
+        "warehouse",
+        "warehouse equipment",
+        "material handling",
+        "material handling equipment",
+        "lift truck",
+        "industrial truck",
+        "fork truck",
+        // ES
+        "concesionario",
+        "distribuidor",
+        "alquiler",
+        "servicio",
+        "repuestos",
+        "montacargas",
+        "carretillas elevadoras",
+        // PT
+        "revendedor",
+        "distribuidor",
+        "locação",
+        "assistência",
+        "peças",
+        "empilhadeira",
+        "empilhadeiras",
+        // DE
+        "händler",
+        "miet",
+        "service",
+        "ersatzteile",
+        "gabelstapler",
+        // FR
+        "concessionnaire",
+        "location",
+        "pièces",
+        "chariots élévateurs",
+    ];
     for (const kw of positive) {
         if (lower.includes(kw)) score += 12;
     }
 
-    if (lower.includes("forklift") || lower.includes("mhe")) score += 15;
+    const forkliftTerms = [
+        "forklift",
+        "fork truck",
+        "lift truck",
+        "industrial truck",
+        "material handling",
+        "material handling equipment",
+        "warehouse equipment",
+        "mhe",
+        "montacargas",
+        "carretillas elevadoras",
+        "empilhadeira",
+        "empilhadeiras",
+        "gabelstapler",
+        "chariots élévateurs",
+    ];
+    if (forkliftTerms.some((kw) => lower.includes(kw))) score += 15;
     if (lower.includes("contact") || lower.includes("contacto") || lower.includes("kontakt")) score += 6;
 
     const oemHit = OEM_KEYWORDS.some((kw) => hostLower.includes(kw) || lower.includes(kw));
