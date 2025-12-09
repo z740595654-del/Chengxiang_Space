@@ -136,3 +136,21 @@
 - 修改点：Food API 密钥读取新增空白字符串规整逻辑，环境变量被清空或留空格时不再误判为开启鉴权；路径判定支持 /food/ 以覆盖 food* 路由形态。
 - 风险点：若未来在 /food/ 下放置静态资源，当前 Worker 会优先处理 GET/PUT 请求，需按实际需求调整路由或路径判断。
 - 建议：保持 Cloudflare Variables 为空以允许免密访问，如需恢复鉴权请设置非空密钥并确认前端同步携带 X-Custom-Auth 头。验证 /food 与 /food/ 两种路径均能返回 200 并完成同步。
+
+## 2025-12-08 20:21 北京时间
+- 操作：调整 Worker fetch 路由优先级，确保 /food 与 /food/ 请求在静态资源分流之前进入 Food API，并为非 GET/PUT 的 /food 请求返回 405 以保持云端接口语义。
+- 新增点：无。
+- 删除点：无。
+- 修改点：静态资源 fallback 放置在 API 路由之后，/food 请求不再被重写到 food.html；保留现有 CORS 预检与 ledger 逻辑。
+- 风险点：/food 任意方法都会由 API 接管，若未来需要在该路径下新增静态页面需调整路由判定；静态资源 fallback 依赖 ASSETS 绑定存在。
+- 建议：部署后分别访问 https://czbpght.cn/food（应返回 JSON）与 https://czbpght.cn/food.html（应展示转盘），并在前端点击同步确认不再出现 Failed to fetch。
+- 原逻辑：请求首先按 Accept 等条件识别为 HTML 时直接走静态资源，导致浏览器访问 /food 被映射到 food.html，API 无法返回 JSON。
+- 改动后逻辑：/food 或 /food/ 请求优先进入 Food API（校验密钥后处理 GET/PUT，否则返回 405），静态资源分流仅在 API 与 ledger 之外执行，避免 /food 被错误重写。
+
+## 2025-12-09 09:20 北京时间
+- 操作：修正 wrangler.toml 路由配置，去掉 /food* 的 custom_domain 标记以避免 Cloudflare 部署时报“Custom Domains 不允许路径/通配符”的报错。
+- 新增点：无。
+- 删除点：移除 custom_domain=true 配置，不再将 /food 作为自定义域名绑定，仅作为普通路由匹配。
+- 修改点：保持 pattern 为 czbpght.cn/food* 作为路由规则，其余配置保持不变。
+- 风险点：如果仍需通过自定义域名托管 Worker，需另行在控制台配置裸域或独立自定义域；当前为普通路由方式，需确保域名已在同一 Zone 下。
+- 建议：部署后验证 wrangler publish 不再出现 Custom Domain 路由校验错误，并确认 https://czbpght.cn/food 返回 JSON、/food.html 正常展示。

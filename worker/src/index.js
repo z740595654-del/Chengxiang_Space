@@ -83,11 +83,7 @@ export default {
     }
 
     try {
-      // ========= 0) 先放行明显的静态资源请求 =========
-      // 这能避免你把整个站点“Worker 化”后页面裂开
-      if (isHtmlRequest(request, path) && !path.startsWith(LEDGER_PREFIX)) {
-        return serveStatic();
-      }
+      const isFoodPath = path === FOOD_PATH || path === `${FOOD_PATH}/`;
 
       // ========= 1) 吃饭转盘云端 API（仅 /food 路径） =========
       // 只有带 X-Custom-Auth 才认为是 API 调用
@@ -95,20 +91,24 @@ export default {
         request.headers.get("X-Custom-Auth") ||
         request.headers.get("x-custom-auth");
 
-      const isFoodPath =
-        path === FOOD_PATH || path === `${FOOD_PATH}/`;
-
-      if (isFoodPath && (method === "GET" || method === "PUT")) {
-        const expect = getFoodApiKey(env);
-        if (expect) {
-          if (foodKey !== expect) {
-            return json({ ok: false, error: "Forbidden" }, 403);
+      if (isFoodPath) {
+        if (method === "GET" || method === "PUT") {
+          const expect = getFoodApiKey(env);
+          if (expect) {
+            if (foodKey !== expect) {
+              return json({ ok: false, error: "Forbidden" }, 403);
+            }
+            return await handleFoodApi(request, env);
           }
+
+          // 没有密码要求时，直接处理 /food 云端存储
           return await handleFoodApi(request, env);
         }
 
-        // 没有密码要求时，直接处理 /food 云端存储
-        return await handleFoodApi(request, env);
+        return new Response("Method Not Allowed", {
+          status: 405,
+          headers: corsHeaders(),
+        });
       }
 
       // ========= 2) 账本 API：/ledger/... =========
@@ -156,6 +156,10 @@ export default {
       }
 
       // ========= 3) 其他路径全部放行给静态站点 =========
+      if (env?.ASSETS) {
+        return serveStatic();
+      }
+
       return fetch(request);
     } catch (e) {
       const msg = e && e.message ? e.message : String(e);
