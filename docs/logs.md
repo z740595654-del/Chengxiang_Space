@@ -156,3 +156,13 @@
 - 建议：发布后验证 https://czbpght.cn/food 与 /food/data 均返回 JSON，随机路径返回 JSON 404，ledger 相关接口正常；如有额外自定义头需求，可在 CORS 配置中补充。
 - 原计算/逻辑：数据域与非数据域统一路径处理，/food 判定后若未匹配则可能回退到静态站点；静态资产绑定可能拦截 API。
 - 改动后逻辑：当请求 host 属于 DATA_ONLY_HOSTS 时仅处理 /food、/food/、/food/data 与 /ledger*，其他一律 JSON 404；/food 与 /food/data 共用 handleFoodApi，其他 host 保持原 API 与透传行为且不再尝试静态回落。
+
+## 2025-12-09 10:48 北京时间
+- 操作：重构 Worker 路由与响应头，统一 D1 绑定名称并精简 Food/Ledger 入口。
+- 新增点：fetch 入口按 OPTIONS/ledger/food/透传扁平分发；CORS_HEADERS 统一复用 JSON 与 CSV 响应；Food/ledger 共享 LEDGER_DB 绑定。
+- 删除点：移除未使用的 HTML 判定与多余的食物口令校验，废弃 MY_DB 绑定名称。
+- 修改点：Ledger 鉴权仅读取 x-ledger-key 与 LEDGER_API_KEY 默认值；Food API 路径兼容 /food 与 /food/data，非 GET/PUT 返回 405；json() 与静态 CSV 均复用同一套 CORS 头。
+- 风险点：更名绑定需同步 Cloudflare 环境；移除 Food 鉴权可能暴露数据，需通过环境变量控制访问；Ledger 密码仅用 LEDGER_API_KEY，若之前依赖 LEDGER_PASSWORD 需更新配置。
+- 建议：部署前在控制台确认 D1 绑定名已更新；上线后验证 /food、/food/data、/ledger/export 及静态首页访问是否正常。
+- 原计算/逻辑：fetch 内部嵌套数据域与路径判定，Food 默认可选密钥校验且使用 MY_DB；CORS 头在 json 与响应中各自维护。
+- 改动后计算/逻辑：fetch 入口直接按 OPTIONS→ledger→food→透传顺序分派；Food 不再校验口令且使用 LEDGER_DB；统一 CORS_HEADERS 供 JSON/CSV/预检复用，减少重复配置。

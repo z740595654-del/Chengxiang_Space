@@ -9,6 +9,6 @@ routes = [
 ]
 
 [[d1_databases]]
-binding = "MY_DB"
+binding = "LEDGER_DB"
 database_name = "food-db"
 database_id = "8c890fa4-43db-42a3-a3be-d2596ec96f20"
