@@ -665,6 +665,15 @@
       return s;
     }
 
+    function getTxSeq(txId) {
+      if (!txId) return null;
+      const str = String(txId);
+      const m = str.match(/-(\d+)$/);
+      if (m) return parseInt(m[1], 10);
+      const n = parseInt(str, 10);
+      return isNaN(n) ? null : n;
+    }
+
     /* ========== 配置初始化 ========== */
     function initSettings() {
       try {
@@ -781,14 +790,18 @@
 
       // 如果有余额锚点，就根据锚点 + 后续流水自动滚动
       const base = appState.balanceBase;
+      const baseSeq = getTxSeq(base && base.tx_id);
       if (base && base.value != null && base.date && appState.transactions.length) {
         let delta = 0;
         for (const tx of appState.transactions) {
           const isAfterBaseDate = tx.date > base.date;
+          const txSeq = getTxSeq(tx.tx_id);
+          const seqGreater =
+            baseSeq !== null && txSeq !== null
+              ? txSeq > baseSeq
+              : !base.tx_id || (tx.tx_id && tx.tx_id > base.tx_id);
           const isSameDayLaterTx =
-            !isAfterBaseDate &&
-            tx.date === base.date &&
-            (!base.tx_id || (tx.tx_id && tx.tx_id > base.tx_id));
+            !isAfterBaseDate && tx.date === base.date && seqGreater;
 
           if (isAfterBaseDate || isSameDayLaterTx) {
             if (tx.category_level1 === "收入") {

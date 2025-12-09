@@ -233,7 +233,8 @@ async function handleGetTransactions(url, env) {
     params.push(to);
   }
 
-  sql += " ORDER BY date DESC, tx_id DESC";
+  const seqExpr = "CAST(substr(tx_id, instr(tx_id, '-') + 1) AS INTEGER)";
+  sql += ` ORDER BY date DESC, ${seqExpr} DESC, tx_id DESC`;
 
   const res = await env.LEDGER_DB.prepare(sql).bind(...params).all();
   return json(res.results || []);
