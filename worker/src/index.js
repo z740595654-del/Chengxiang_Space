@@ -1,154 +1,55 @@
 const LEDGER_PREFIX = "/ledger";
-const FOOD_PATH = "/food";
-const DATA_ONLY_HOSTS = new Set(["czbpght.cn", "www.czbpght.cn"]);
-// build test
-
-// 兼容你现有前端的默认值
+const FOOD_BASE_PATH = "/food";
 const DEFAULT_LEDGER_PASSWORD = "020117";
-const DEFAULT_FOOD_API_KEY = "";
 
-function corsHeaders(extra = {}) {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,PUT,POST,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers":
-      "Content-Type, X-Custom-Auth, x-ledger-key, X-Ledger-Key",
-    ...extra,
-  };
-}
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET,PUT,POST,DELETE,OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, X-Custom-Auth, x-ledger-key, X-Ledger-Key",
+};
 
-function jsonResp(obj, status = 200) {
-  return new Response(JSON.stringify(obj), {
+const json = (obj, status = 200) =>
+  new Response(JSON.stringify(obj), {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET,PUT,POST,DELETE,OPTIONS",
-      "Access-Control-Allow-Headers":
-        "Content-Type, X-Custom-Auth, x-ledger-key, X-Ledger-Key",
+      ...CORS_HEADERS,
     },
   });
-}
-
-const json = jsonResp;
-
-function getLedgerPassword(env) {
-  return (
-    env?.LEDGER_API_KEY ||
-    env?.LEDGER_PASSWORD ||
-    DEFAULT_LEDGER_PASSWORD
-  );
-}
-
-function normalizeFoodKeyValue(raw) {
-  if (!raw) return "";
-  const trimmed = String(raw).trim();
-  return trimmed.length === 0 ? "" : trimmed;
-}
-
-function getFoodApiKey(env) {
-  return (
-    normalizeFoodKeyValue(env?.FOOD_API_KEY) ||
-    normalizeFoodKeyValue(env?.FOOD_PASSWORD) ||
-    DEFAULT_FOOD_API_KEY
-  );
-}
-
-function isHtmlRequest(request, path) {
-  const accept = request.headers.get("Accept") || "";
-  return (
-    accept.includes("text/html") ||
-    path.endsWith(".html") ||
-    path === "/favicon.ico" ||
-    path.startsWith("/assets/") ||
-    path.endsWith(".css") ||
-    path.endsWith(".js") ||
-    path.endsWith(".png") ||
-    path.endsWith(".jpg") ||
-    path.endsWith(".svg")
-  );
-}
 
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
-    const hostname = url.hostname;
     const method = request.method.toUpperCase();
 
-    const isFoodDataPath = path === "/food/data";
-    const isFoodCompatPath = path === FOOD_PATH || path === `${FOOD_PATH}/`;
-
-    // CORS 预检
     if (method === "OPTIONS") {
-      return new Response(null, {
-        status: 204,
-        headers: corsHeaders(),
-      });
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
-    try {
-      const isFoodPath = isFoodDataPath || isFoodCompatPath;
-
-      const handleFoodRequest = async () => {
-        const foodKey =
-          request.headers.get("X-Custom-Auth") ||
-          request.headers.get("x-custom-auth");
-
-        if (method === "GET" || method === "PUT") {
-          const expect = getFoodApiKey(env);
-          if (expect && foodKey !== expect) {
-            return jsonResp({ ok: false, error: "Forbidden" }, 403);
-          }
-          return await handleFoodApi(request, env);
-        }
-
-        return jsonResp({ ok: false, error: "Method Not Allowed" }, 405);
-      };
-
-      const isDataOnlyHost = DATA_ONLY_HOSTS.has(hostname);
-
-      if (isDataOnlyHost) {
-        if (isFoodPath) {
-          return await handleFoodRequest();
-        }
-
-        if (path.startsWith(LEDGER_PREFIX)) {
-          return await handleLedgerRequest({
-            path,
-            method,
-            url,
-            env,
-            request,
-          });
-        }
-
-        return jsonResp({ ok: false, error: "Not found" }, 404);
-      }
-      // ========= 1) 吃饭转盘云端 API（仅 /food 路径） =========
-      if (isFoodPath) {
-        return await handleFoodRequest();
-      }
-
-      // ========= 2) 账本 API：/ledger/... =========
-      if (path.startsWith(LEDGER_PREFIX)) {
-        return await handleLedgerRequest({ path, method, url, env, request });
-      }
-
-      // ========= 3) 其他路径直接透传 =========
-      return fetch(request);
-    } catch (e) {
-      const msg = e && e.message ? e.message : String(e);
-      return jsonResp({ ok: false, error: "Server Error: " + msg }, 500);
+    if (path.startsWith(LEDGER_PREFIX)) {
+      return handleLedgerRequest({ path, method, url, env, request });
     }
+
+    if (isFoodPath(path)) {
+      return handleFoodApi(request, env, method);
+    }
+
+    return fetch(request);
   },
 };
 
+function getLedgerPassword(env) {
+  return env?.LEDGER_API_KEY || DEFAULT_LEDGER_PASSWORD;
+}
+
+function isFoodPath(path) {
+  return path === FOOD_BASE_PATH || path === `${FOOD_BASE_PATH}/` || path === `${FOOD_BASE_PATH}/data`;
+}
+
 async function handleLedgerRequest({ path, method, url, env, request }) {
   const ledgerPwd = getLedgerPassword(env);
-
-  const headerKey =
-    request.headers.get("x-ledger-key") || request.headers.get("X-Ledger-Key");
+  const headerKey = request.headers.get("x-ledger-key") || request.headers.get("X-Ledger-Key");
 
   if (ledgerPwd && headerKey !== ledgerPwd) {
     return json({ ok: false, error: "Unauthorized" }, 401);
@@ -159,44 +60,39 @@ async function handleLedgerRequest({ path, method, url, env, request }) {
   const subPath = path.slice(LEDGER_PREFIX.length) || "/";
 
   if (method === "GET" && subPath === "/transactions") {
-    return await handleGetTransactions(url, env);
+    return handleGetTransactions(url, env);
   }
 
   if (method === "POST" && subPath === "/transactions") {
-    return await handlePostTransaction(request, env);
+    return handlePostTransaction(request, env);
   }
 
   if (method === "DELETE" && subPath.startsWith("/transactions/")) {
     const parts = subPath.split("/");
     const tx_id = parts[2];
-    return await handleDeleteTransaction(tx_id, env);
+    return handleDeleteTransaction(tx_id, env);
   }
 
   if (method === "GET" && subPath === "/logs") {
-    return await handleGetLogs(url, env);
+    return handleGetLogs(url, env);
   }
 
   if (method === "GET" && subPath === "/export") {
-    return await handleExportCsv(env);
+    return handleExportCsv(env);
   }
 
-  return new Response("Not found", {
-    status: 404,
-    headers: corsHeaders(),
-  });
+  return new Response("Not found", { status: 404, headers: CORS_HEADERS });
 }
 
 /* ========== 干饭转盘后端：单表 JSON 存储 ========== */
 
-async function handleFoodApi(request, env) {
-  const method = request.method.toUpperCase();
-
-  await env.MY_DB.prepare(
+async function handleFoodApi(request, env, method) {
+  await env.LEDGER_DB.prepare(
     "CREATE TABLE IF NOT EXISTS food_state (id INTEGER PRIMARY KEY, data TEXT NOT NULL)"
   ).run();
 
   if (method === "GET") {
-    const row = await env.MY_DB.prepare(
+    const row = await env.LEDGER_DB.prepare(
       "SELECT data FROM food_state WHERE id = 1"
     ).first();
 
@@ -206,7 +102,7 @@ async function handleFoodApi(request, env) {
       status: 200,
       headers: {
         "Content-Type": "application/json;charset=utf-8",
-        ...corsHeaders(),
+        ...CORS_HEADERS,
       },
     });
   }
@@ -218,7 +114,7 @@ async function handleFoodApi(request, env) {
       return json({ ok: false, error: "Payload too large" }, 413);
     }
 
-    await env.MY_DB.prepare(
+    await env.LEDGER_DB.prepare(
       `INSERT INTO food_state (id, data)
        VALUES (1, ?)
        ON CONFLICT(id) DO UPDATE SET data = excluded.data`
@@ -231,7 +127,7 @@ async function handleFoodApi(request, env) {
 
   return new Response("Method Not Allowed", {
     status: 405,
-    headers: corsHeaders(),
+    headers: CORS_HEADERS,
   });
 }
 
@@ -266,7 +162,7 @@ let ledgerSchemaReady = false;
 async function ensureLedgerSchema(env) {
   if (ledgerSchemaReady) return;
 
-  await env.MY_DB.prepare(
+  await env.LEDGER_DB.prepare(
     `CREATE TABLE IF NOT EXISTS ledger_transactions (
       tx_id TEXT PRIMARY KEY,
       date TEXT NOT NULL,
@@ -281,7 +177,7 @@ async function ensureLedgerSchema(env) {
     )`
   ).run();
 
-  await env.MY_DB.prepare(
+  await env.LEDGER_DB.prepare(
     `CREATE TABLE IF NOT EXISTS ledger_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       time TEXT NOT NULL,
@@ -292,18 +188,18 @@ async function ensureLedgerSchema(env) {
     )`
   ).run();
 
-  const infoTx = await env.MY_DB.prepare(
+  const infoTx = await env.LEDGER_DB.prepare(
     "PRAGMA table_info(ledger_transactions)"
   ).all();
   const cols = (infoTx.results || infoTx || []).map((c) => c.name || c[1]);
 
   if (!cols.includes("is_xiaoe")) {
-    await env.MY_DB.prepare(
+    await env.LEDGER_DB.prepare(
       "ALTER TABLE ledger_transactions ADD COLUMN is_xiaoe INTEGER DEFAULT 0"
     ).run();
   }
   if (!cols.includes("is_deleted")) {
-    await env.MY_DB.prepare(
+    await env.LEDGER_DB.prepare(
       "ALTER TABLE ledger_transactions ADD COLUMN is_deleted INTEGER DEFAULT 0"
     ).run();
   }
@@ -339,7 +235,7 @@ async function handleGetTransactions(url, env) {
 
   sql += " ORDER BY date DESC, tx_id DESC";
 
-  const res = await env.MY_DB.prepare(sql).bind(...params).all();
+  const res = await env.LEDGER_DB.prepare(sql).bind(...params).all();
   return json(res.results || []);
 }
 
@@ -369,7 +265,7 @@ async function handlePostTransaction(request, env) {
 
   if (!tx_id) {
     const today = date.replaceAll("-", "");
-    const countRes = await env.MY_DB.prepare(
+    const countRes = await env.LEDGER_DB.prepare(
       "SELECT COUNT(*) AS c FROM ledger_transactions WHERE date = ?"
     )
       .bind(date)
@@ -378,7 +274,7 @@ async function handlePostTransaction(request, env) {
     tx_id = `${today}-${nextNum}`;
   }
 
-  await env.MY_DB.prepare(
+  await env.LEDGER_DB.prepare(
     `INSERT INTO ledger_transactions
       (tx_id, date, amount, category_level1, category_level2,
        description, account, book, is_xiaoe, is_deleted)
@@ -406,7 +302,7 @@ async function handlePostTransaction(request, env) {
 async function handleDeleteTransaction(tx_id, env) {
   if (!tx_id) return json({ ok: false, error: "Missing tx_id" }, 400);
 
-  const res = await env.MY_DB.prepare(
+  const res = await env.LEDGER_DB.prepare(
     "SELECT * FROM ledger_transactions WHERE tx_id = ? AND (is_deleted IS NULL OR is_deleted = 0)"
   )
     .bind(tx_id)
@@ -414,7 +310,7 @@ async function handleDeleteTransaction(tx_id, env) {
 
   if (!res) return json({ ok: false, error: "Not found" }, 404);
 
-  await env.MY_DB.prepare(
+  await env.LEDGER_DB.prepare(
     "UPDATE ledger_transactions SET is_deleted = 1 WHERE tx_id = ?"
   )
     .bind(tx_id)
@@ -428,7 +324,7 @@ async function handleDeleteTransaction(tx_id, env) {
 
 // 写日志
 async function logAction(env, action, tx_id, description, amount) {
-  await env.MY_DB.prepare(
+  await env.LEDGER_DB.prepare(
     `INSERT INTO ledger_logs (time, action, tx_id, description, amount)
      VALUES (datetime('now', 'localtime'), ?, ?, ?, ?)`
   )
@@ -458,13 +354,13 @@ async function handleGetLogs(url, env) {
   sql += " ORDER BY time DESC LIMIT ?";
   params.push(limit);
 
-  const res = await env.MY_DB.prepare(sql).bind(...params).all();
+  const res = await env.LEDGER_DB.prepare(sql).bind(...params).all();
   return json(res.results || []);
 }
 
 // GET /ledger/export
 async function handleExportCsv(env) {
-  const res = await env.MY_DB.prepare(
+  const res = await env.LEDGER_DB.prepare(
     `SELECT tx_id,date,amount,category_level1,category_level2,
             description,account,book,is_xiaoe
      FROM ledger_transactions
@@ -498,7 +394,7 @@ async function handleExportCsv(env) {
     headers: {
       "Content-Type": "text/csv;charset=utf-8",
       "Content-Disposition": "attachment; filename=ledger_export.csv",
-      ...corsHeaders(),
+      ...CORS_HEADERS,
     },
   });
 }
