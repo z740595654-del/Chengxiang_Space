@@ -166,3 +166,20 @@
 - 建议：部署前在控制台确认 D1 绑定名已更新；上线后验证 /food、/food/data、/ledger/export 及静态首页访问是否正常。
 - 原计算/逻辑：fetch 内部嵌套数据域与路径判定，Food 默认可选密钥校验且使用 MY_DB；CORS 头在 json 与响应中各自维护。
 - 改动后计算/逻辑：fetch 入口直接按 OPTIONS→ledger→food→透传顺序分派；Food 不再校验口令且使用 LEDGER_DB；统一 CORS_HEADERS 供 JSON/CSV/预检复用，减少重复配置。
+
+## 2025-12-09 11:06 北京时间
+- 操作：新增 Lead Finder 客户线索抓取入口与页面，接入独立 Worker 调用 Google CSE 并抓取网站联系方式。
+- 新增点：
+  - 首页 bento 卡片增加“客户线索抓取”入口跳转 leads.html。
+  - 新建 leads.html，提供关键词/Country/limit 输入、抓取按钮、结果表与 CSV 导出。
+  - 新建 lead-finder Worker（/api/leads），读取环境中的 GOOGLE_API_KEY 与 GOOGLE_CSE_ID，调用 Google 搜索并抓取站点首页及 contact/about 页面（最多 2 页）抽取邮箱和电话。
+- 删除点：无。
+- 修改点：无（功能为新增模块）。
+- 风险点：
+  - Google CSE 配额或配置错误会导致接口失败；搜索结果页若含反爬限制可能抓取不到联系信息。
+  - 抓取邮箱/电话依赖正则匹配，可能漏掉非标准格式或误识别页面数字。
+- 建议：
+  - 部署前在环境变量中填入有效的 GOOGLE_API_KEY 与 GOOGLE_CSE_ID 并在浏览器实际输入关键词验证返回。
+  - 若需提升命中率，可后续增加更多候选路径或改进正则精度。
+- 原计算/逻辑：无（此前没有线索抓取功能）。
+- 改动后计算/逻辑：Google 搜索返回结果后提取 hostname 作为网站，优先使用 title 作为公司名；依次抓取搜索链接与站点 /、/contact、/contact-us、/about、/about-us 页面中的邮箱和电话（最多成功读取 2 页），按 Country, Company, Website, City, Phone, Email 顺序返回 JSON 并允许跨域访问。

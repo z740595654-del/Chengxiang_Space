@@ -1,0 +1,7 @@
+name = "lead-finder"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+[vars]
+# GOOGLE_API_KEY = ""
+# GOOGLE_CSE_ID = ""
