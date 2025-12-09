@@ -183,3 +183,20 @@
   - 若需提升命中率，可后续增加更多候选路径或改进正则精度。
 - 原计算/逻辑：无（此前没有线索抓取功能）。
 - 改动后计算/逻辑：Google 搜索返回结果后提取 hostname 作为网站，优先使用 title 作为公司名；依次抓取搜索链接与站点 /、/contact、/contact-us、/about、/about-us 页面中的邮箱和电话（最多成功读取 2 页），按 Country, Company, Website, City, Phone, Email 顺序返回 JSON 并允许跨域访问。
+
+## 2025-12-09 11:45 北京时间
+- 操作：Lead Finder 协议对齐修复，补齐 /api/leads 与 /leads 路由和参数兼容，并保留 /enrich 入口。
+- 新增点：
+  - /leads 路径作为兼容入口，/api/leads 与 /leads 支持 q/keyword、limit/num、country、start 参数；/enrich 返回占位响应以避免 404。
+  - Google CSE 查询支持 start 偏移与 limit 上限裁剪，确保与前端需求匹配。
+- 删除点：无。
+- 修改点：
+  - 统一 CORS 头与 404 JSON 响应格式；/api/leads 与 /leads 成功返回 { ok:true, results } 且字段小写。
+  - limit 默认 10、上限 10（旧逻辑：默认 10、上限 20），路由从仅 /api/leads 扩展到 /leads，并兼容 keyword/num/start 参数。
+  - 404 原因修复：此前前端调用 /api/leads 之外的 /leads 会返回 404，现已对齐路径与协议。
+- 风险点：
+  - 仍依赖有效的 GOOGLE_API_KEY 与 GOOGLE_CSE_ID；外部站点反爬或页面格式异常可能导致单条邮箱/电话抓取失败。
+- 建议：
+  - 部署后分别访问 /api/leads 与 /leads（含 q/keyword、limit/num、start 组合）验证返回结构；确认前端 leads.html 点击“开始抓取”不再出现 404。
+- 原计算/逻辑：仅 /api/leads 路由，参数只识别 q 与 limit（上限 20），未处理 keyword/num/start，404 发生在 /leads 请求；响应结构已为 { ok:true, results }。
+- 改动后计算/逻辑：/api/leads 与 /leads 共用处理器，接受 q 或 keyword、limit 或 num（上限 10）、可选 country 与 start，缺参返回 400；保持 Google CSE 搜索并抓取最多 2 页联系方式，统一 CORS/404 响应，/enrich 返回占位 JSON。

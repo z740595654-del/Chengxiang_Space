@@ -12,11 +12,14 @@ export default {
             return new Response(null, { status: 204, headers: CORS_HEADERS });
         }
 
-        if (url.pathname === "/api/leads") {
-            if (request.method !== "GET") {
-                return jsonResponse({ ok: false, message: "Method not allowed" }, 405);
+        if (request.method === "GET") {
+            if (url.pathname === "/api/leads" || url.pathname === "/leads") {
+                return handleLeads(url, env);
             }
-            return handleLeads(url, env);
+
+            if (url.pathname === "/enrich") {
+                return jsonResponse({ ok: true, message: "Enrich endpoint reserved" });
+            }
         }
 
         return jsonResponse({ ok: false, message: "Not found" }, 404);
@@ -24,9 +27,12 @@ export default {
 };
 
 async function handleLeads(url, env) {
-    const query = url.searchParams.get("q")?.trim();
-    const country = url.searchParams.get("country")?.trim() || "";
-    const limit = clampLimit(url.searchParams.get("limit"));
+    const query =
+        (url.searchParams.get("q") ?? url.searchParams.get("keyword") ?? "").trim();
+    const country = (url.searchParams.get("country") ?? "").trim();
+    const limitParam = url.searchParams.get("limit") ?? url.searchParams.get("num");
+    const limit = clampLimit(limitParam);
+    const start = clampStart(url.searchParams.get("start"));
 
     if (!query) {
         return jsonResponse({ ok: false, message: "缺少 q 参数" }, 400);
@@ -37,7 +43,7 @@ async function handleLeads(url, env) {
     }
 
     try {
-        const items = await searchGoogle(query, limit, env);
+        const items = await searchGoogle(query, limit, start, env);
         const results = [];
 
         for (const item of items) {
@@ -57,15 +63,24 @@ async function handleLeads(url, env) {
 function clampLimit(rawLimit) {
     const num = parseInt(rawLimit, 10);
     if (Number.isNaN(num)) return 10;
-    return Math.max(1, Math.min(num, 20));
+    return Math.max(1, Math.min(num, 10));
 }
 
-async function searchGoogle(query, limit, env) {
+function clampStart(rawStart) {
+    const num = parseInt(rawStart, 10);
+    if (Number.isNaN(num) || num < 1) return undefined;
+    return num;
+}
+
+async function searchGoogle(query, limit, start, env) {
     const searchUrl = new URL("https://www.googleapis.com/customsearch/v1");
     searchUrl.searchParams.set("key", env.GOOGLE_API_KEY);
     searchUrl.searchParams.set("cx", env.GOOGLE_CSE_ID);
     searchUrl.searchParams.set("q", query);
     searchUrl.searchParams.set("num", String(limit));
+    if (start) {
+        searchUrl.searchParams.set("start", String(start));
+    }
 
     const resp = await fetch(searchUrl);
     if (!resp.ok) {
@@ -105,7 +120,7 @@ async function transformResult(item, country) {
 
 function buildPageList(origin, rawLink) {
     const candidates = [rawLink];
-    const commonPaths = ["/", "/contact", "/contact-us", "/about", "/about-us"]; 
+    const commonPaths = ["/", "/contact", "/contact-us", "/about", "/about-us"];
     for (const path of commonPaths) {
         candidates.push(`${origin}${path}`);
     }
