@@ -200,3 +200,42 @@
   - 部署后分别访问 /api/leads 与 /leads（含 q/keyword、limit/num、start 组合）验证返回结构；确认前端 leads.html 点击“开始抓取”不再出现 404。
 - 原计算/逻辑：仅 /api/leads 路由，参数只识别 q 与 limit（上限 20），未处理 keyword/num/start，404 发生在 /leads 请求；响应结构已为 { ok:true, results }。
 - 改动后计算/逻辑：/api/leads 与 /leads 共用处理器，接受 q 或 keyword、limit 或 num（上限 10）、可选 country 与 start，缺参返回 400；保持 Google CSE 搜索并抓取最多 2 页联系方式，统一 CORS/404 响应，/enrich 返回占位 JSON。
+
+## 2025-12-10 20:30 北京时间
+- 操作：合并 Lead Finder 升级记录，修复 Pages /leads 静态路由源码泄露，前端改用 Worker 绝对地址，/enrich 响应兼容扁平与 result 包装，并确认 meta 统计口径与占位规则。
+- 新增点：
+  - leads.html 仅保留浏览器前端逻辑，API_BASE 指向 https://lead-finder.740595654.workers.dev，避免 Pages 同源 404。
+  - /enrich 返回同时包含 {phone,email,emailScore,phoneScore} 扁平字段与 result 包装，前端支持两种读取。
+- 删除点：无（保留既有日志记录）。
+- 修改点：
+  - 记录 meta 字段契约：/api/leads 与 /leads 统一返回 totalItems、uniqueDomains、filteredByBlacklist（仅后缀黑名单拦截）、filteredByScore（含 OEM 关键词扣分导致低于阈值的过滤）、kept；enrich=0 时 phone/email 固定为空字符串。
+  - 明确后端阈值 DEALER_SCORE_THRESHOLD=35，黑名单采用后缀匹配避免误杀，经销商低于阈值才过滤；外部抓取并发 3、超时 3-5 秒并降级。
+  - 说明 Pages /leads 显示源码原因：Cloudflare Pages 无扩展名路由将 /leads 映射为 /leads.html，原文件为 Worker JS 源码导致直接展示；现通过前后端职责分离，leads.html 改为纯前端 UI，后端留在 lead-finder Worker。
+- 风险点：
+  - 绝对域名依赖 Worker 域名稳定性，若更换域名需同步更新前端常量；/enrich 抓取仍受目标站反爬与网络波动影响，可能少量联系方式为空。
+- 建议：
+  - 部署后访问 https://food-spin.pages.dev/leads 验证 UI 正常、点击“开始抓取”能逐条补全；监控 /api/leads meta 统计是否符合预期，若需更换 Worker 域名请同步修改 API_BASE。
+- 逻辑变更说明：
+  - 原 meta 命名：曾提及 raw/filtered/enriched 等表述；现统一为 totalItems、uniqueDomains、filteredByBlacklist、filteredByScore、kept，并明确归因（黑名单仅计后缀拦截，评分淘汰包含 OEM 扣分后低于 35 的过滤）。
+  - 原前端调用同源 /api/leads、/enrich 在 Pages 下会 404；现改为 Worker 绝对地址避免路由冲突。
+  - 原 /enrich 仅返回 result 包装；现兼容扁平字段以适配多版本前端。
+
+## 2025-12-11 12:00 北京时间
+- 操作：修正 Lead Finder 契约并恢复历史日志，细化 uniqueDomains 统计口径，降低 OEM 品牌词扣分，前端 CSV 导出增加最小转义。
+- 新增点：
+  - 保留全部历史日志记录，避免审计断档。
+- 删除点：无。
+- 修改点：
+  - uniqueDomains 统计改为仅计入通过黑名单与评分阈值筛选后、最终返回列表中的域名，避免计入被淘汰项；对应 meta 归因保持 filteredByBlacklist 仅计后缀黑名单、filteredByScore 覆盖 OEM 扣分后低于阈值的淘汰。
+  - OEM 品牌词扣分从 -40 下调至 -28，并继续在正文/域名命中时扣分，以降低对授权经销商的误伤概率。
+  - 前端 CSV 导出遇到逗号/引号/换行时自动加引号并转义双引号，避免字段中逗号破坏列结构。
+- 风险点：
+  - uniqueDomains 口径收窄可能让与历史报表对比时数值下降，需要说明统计依据变化。
+  - OEM 扣分变轻后可能漏掉部分集团站结果，需配合后缀黑名单一起观察；前端转义逻辑未做大型数据集性能验证。
+- 建议：
+  - 回归测试 /api/leads?enrich=0 与 /leads 旧入口，确认 meta 字段、phone/email 占位与去重口径符合预期；检查 /enrich 仍返回 result 包装与扁平字段。
+  - 如需进一步降低 OEM 影响，可增补品牌后缀黑名单或仅对正文命中扣分。
+- 逻辑变更说明：
+  - 原 uniqueDomains 逻辑：在评分过滤前即累加域名，可能包含被阈值淘汰的站点；现改为只对最终返回（kept）列表去重。
+  - 原 OEM 扣分：命中品牌词时一次性扣 40 分；现调整为扣 28 分以减少对授权经销商域名的误伤，仍覆盖域名与正文命中。
+  - CSV 原逻辑：直接拼接逗号分隔；现遇逗号/引号/换行时包裹双引号并转义双引号。
