@@ -9,7 +9,29 @@ const SEARCH_TIMEOUT_MS = 5000;
 const FETCH_TIMEOUT_MS = 4000;
 const MAX_ENRICH_CONCURRENCY = 3;
 
-const OEM_BLOCKLIST = [
+// OEM 主站后缀黑名单（只做后缀匹配，避免误杀经销商子域）
+const OEM_BLOCKLIST_SUFFIXES = [
+    ".hyster.com",
+    ".hyster-yale.com",
+    ".toyotaforklift.com",
+    ".toyotaforklifts.com",
+    ".toyotamaterialhandling.com",
+    ".jungheinrich.com",
+    ".jungheinrich.cn",
+    ".crown.com",
+    ".linde-mh.com",
+    ".linde-mh.cn",
+    ".still.de",
+    ".still.com",
+    ".komatsu.com",
+    ".logisnext.com",
+    ".mitsubishi-logisnext.com",
+    ".hyundai-ce.com",
+    ".doosan.com",
+    ".kalmarglobal.com",
+];
+
+const OEM_KEYWORDS = [
     "hyster",
     "toyota",
     "jungheinrich",
@@ -126,24 +148,41 @@ async function handleLeads(url, env) {
     try {
         const rawItems = await performSearch(searchQueries, limit, start, env);
         const transformed = [];
-        const meta = { raw: rawItems.length, filtered: 0, enriched: 0 };
+        const domainSet = new Set();
+        const meta = {
+            totalItems: rawItems.length,
+            uniqueDomains: 0,
+            filteredByBlacklist: 0,
+            filteredByScore: 0,
+            kept: 0,
+        };
 
         for (const item of rawItems) {
             const parsed = await transformResult(item, country, mode);
             if (!parsed) continue;
-            meta.filtered += 1;
-            if (mode === "dealer" && parsed.score < DEALER_SCORE_THRESHOLD) {
+            if (parsed.blocked) {
+                meta.filteredByBlacklist += 1;
                 continue;
             }
-            transformed.push(parsed);
+            const lead = parsed.lead;
+            if (lead?.website) {
+                domainSet.add(lead.website.toLowerCase());
+            }
+            if (mode === "dealer" && lead.score < DEALER_SCORE_THRESHOLD) {
+                meta.filteredByScore += 1;
+                continue;
+            }
+            transformed.push(lead);
         }
 
         let results = transformed.slice(0, limit);
 
         if (enrichEnabled && results.length) {
             results = await enrichBatch(results, lang, country);
-            meta.enriched = results.filter((r) => r.phone || r.email).length;
         }
+
+        meta.kept = results.length;
+        meta.uniqueDomains = domainSet.size;
 
         return jsonResponse({ ok: true, results, meta });
     } catch (err) {
@@ -215,7 +254,7 @@ async function transformResult(item, country, mode) {
         const url = new URL(item.link);
         website = url.hostname;
         origin = url.origin;
-        if (isBlockedDomain(website)) return null;
+        if (isBlockedDomain(website)) return { blocked: true };
     } catch {
         return null;
     }
@@ -226,22 +265,27 @@ async function transformResult(item, country, mode) {
     const tags = deriveTags(description);
 
     return {
-        country,
-        company,
-        website,
-        city: "",
-        phone: "",
-        email: "",
-        sourceUrl: item.link,
-        score,
-        tags,
-        meta: { origin },
+        lead: {
+            country,
+            company,
+            website,
+            city: "",
+            phone: "",
+            email: "",
+            sourceUrl: item.link,
+            score,
+            tags,
+            meta: { origin },
+        },
     };
 }
 
 function isBlockedDomain(hostname) {
-    const host = hostname.toLowerCase();
-    return OEM_BLOCKLIST.some((kw) => host.includes(kw));
+    const host = hostname.toLowerCase().replace(/^www\./, "");
+    return OEM_BLOCKLIST_SUFFIXES.some((suffix) => {
+        const cleanSuffix = suffix.replace(/^\./, "");
+        return host === cleanSuffix || host.endsWith(suffix);
+    });
 }
 
 function computeScore(text, website, mode) {
@@ -256,7 +300,7 @@ function computeScore(text, website, mode) {
     if (lower.includes("forklift") || lower.includes("mhe")) score += 15;
     if (lower.includes("contact") || lower.includes("contacto") || lower.includes("kontakt")) score += 6;
 
-    if (OEM_BLOCKLIST.some((kw) => website.toLowerCase().includes(kw) || lower.includes(kw))) {
+    if (OEM_KEYWORDS.some((kw) => website.toLowerCase().includes(kw) || lower.includes(kw))) {
         score -= 40;
     }
 
@@ -312,8 +356,9 @@ async function enrichBatch(results, lang, country) {
 async function handleEnrich(url) {
     const website = (url.searchParams.get("website") || "").trim();
     if (!website) return jsonResponse({ ok: false, message: "缺少 website" }, 400);
-    const lang = (url.searchParams.get("lang") || "en").toLowerCase();
+    const langParam = (url.searchParams.get("lang") || "en").toLowerCase();
     const country = normalizeCountryName(url.searchParams.get("country"));
+    const lang = resolveLang(country, langParam);
 
     try {
         const detail = await enrichSingle(website, lang, country);

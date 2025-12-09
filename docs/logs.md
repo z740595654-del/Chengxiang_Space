@@ -198,6 +198,25 @@
   - 仍依赖有效的 GOOGLE_API_KEY 与 GOOGLE_CSE_ID；外部站点反爬或页面格式异常可能导致单条邮箱/电话抓取失败。
 - 建议：
   - 部署后分别访问 /api/leads 与 /leads（含 q/keyword、limit/num、start 组合）验证返回结构；确认前端 leads.html 点击“开始抓取”不再出现 404。
+
+## 2025-12-10 01:15 北京时间
+- 操作：按验收契约调整 Lead Finder 元数据字段与 OEM 过滤策略，并补充 Pages 源码暴露原因的说明。
+- 新增点：
+  - 返回 meta 字段严格采用 totalItems、uniqueDomains、filteredByBlacklist、filteredByScore、kept，并在 enrich=0 时保持 phone/email 为空字符串。
+  - 日志新增 Cloudflare Pages /leads 显示源码的原因说明：无扩展路由映射到 leads.html，而文件内容是 Worker JS 源码导致被静态展示；现通过前后端职责分离，将 leads.html 重写为纯前端页面避免源码暴露。
+- 删除点：
+  - 移除 meta.raw/meta.filtered/meta.enriched 的命名使用，避免与契约不一致。
+- 修改点：
+  - OEM 黑名单改为后缀匹配（如 *.hyster.com 等）并保留注释，降低对子域经销商的误杀；评分依然对 OEM 关键词做扣分但不直接过滤。
+  - /api/leads 与 /leads 共用参数解析，dealer 模式过滤低于 DEALER_SCORE_THRESHOLD=35 的线索，并统计黑名单与评分过滤数量。
+- 风险点：
+  - OEM 后缀列表可能仍遗漏少量品牌域名，需按线上反馈补充；meta 字段名变更可能影响依赖旧字段的消费方。
+- 建议：
+  - 发布后验证 /api/leads?q=... 及 /leads?keyword=... 返回的 meta 字段按新命名生效，phone/email 在 enrich=0 时为空；检查 Pages /leads 是否正常展示前端 UI 且不再暴露 Worker 源码。
+- 原计算/逻辑：
+  - meta 使用 raw/filtered/enriched 命名，OEM 黑名单以包含匹配方式处理，可能误伤包含品牌词的经销商域名。
+- 改动后计算/逻辑：
+  - meta 统计 totalItems（原 raw）、uniqueDomains（按留存域名去重）、filteredByBlacklist、filteredByScore、kept（最终保留条数）；OEM 过滤仅对匹配后缀的主站做剔除，其余仅在评分阶段扣分。
 - 原计算/逻辑：仅 /api/leads 路由，参数只识别 q 与 limit（上限 20），未处理 keyword/num/start，404 发生在 /leads 请求；响应结构已为 { ok:true, results }。
 - 改动后计算/逻辑：/api/leads 与 /leads 共用处理器，接受 q 或 keyword、limit 或 num（上限 10）、可选 country 与 start，缺参返回 400；保持 Google CSE 搜索并抓取最多 2 页联系方式，统一 CORS/404 响应，/enrich 返回占位 JSON。
 
