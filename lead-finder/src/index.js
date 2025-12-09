@@ -5,6 +5,7 @@ const CORS_HEADERS = Object.freeze({
 });
 
 const DEALER_SCORE_THRESHOLD = 35;
+const NON_EN_DEALER_THRESHOLD = 28;
 const SEARCH_TIMEOUT_MS = 5000;
 const FETCH_TIMEOUT_MS = 4000;
 const MAX_ENRICH_CONCURRENCY = 3;
@@ -138,6 +139,14 @@ async function handleLeads(url, env) {
     const langParam = (url.searchParams.get("lang") || "auto").toLowerCase();
     const enrichEnabled = (url.searchParams.get("enrich") || "0") === "1";
     const lang = resolveLang(country, langParam);
+    const scoreThreshold =
+        mode === "dealer"
+            ? lang === "en"
+                ? DEALER_SCORE_THRESHOLD
+                : NON_EN_DEALER_THRESHOLD
+            : 0;
+
+    // 手测建议：/api/leads?q=forklift&country=Spain&limit=10&mode=dealer&lang=auto&enrich=0
 
     if (!env.GOOGLE_API_KEY || !env.GOOGLE_CSE_ID) {
         return jsonResponse({ ok: false, message: "缺少 Google API 配置" }, 500);
@@ -164,7 +173,7 @@ async function handleLeads(url, env) {
                 continue;
             }
             const lead = parsed.lead;
-            if (mode === "dealer" && lead.score < DEALER_SCORE_THRESHOLD) {
+            if (mode === "dealer" && lead.score < scoreThreshold) {
                 meta.filteredByScore += 1;
                 continue;
             }
@@ -293,12 +302,57 @@ function computeScore(text, website, mode) {
     const hostLower = website.toLowerCase();
     let score = 10;
 
-    const positive = ["dealer", "distributor", "rental", "service", "parts", "used forklift", "warehouse"];
+    const positive = [
+        "dealer",
+        "distributor",
+        "rental",
+        "service",
+        "parts",
+        "used forklift",
+        "warehouse",
+        // ES
+        "concesionario",
+        "distribuidor",
+        "alquiler",
+        "servicio",
+        "repuestos",
+        "montacargas",
+        "carretillas elevadoras",
+        // PT
+        "revendedor",
+        "distribuidor",
+        "locação",
+        "assistência",
+        "peças",
+        "empilhadeira",
+        "empilhadeiras",
+        // DE
+        "händler",
+        "miet",
+        "service",
+        "ersatzteile",
+        "gabelstapler",
+        // FR
+        "concessionnaire",
+        "location",
+        "pièces",
+        "chariots élévateurs",
+    ];
     for (const kw of positive) {
         if (lower.includes(kw)) score += 12;
     }
 
-    if (lower.includes("forklift") || lower.includes("mhe")) score += 15;
+    const forkliftTerms = [
+        "forklift",
+        "mhe",
+        "montacargas",
+        "carretillas elevadoras",
+        "empilhadeira",
+        "empilhadeiras",
+        "gabelstapler",
+        "chariots élévateurs",
+    ];
+    if (forkliftTerms.some((kw) => lower.includes(kw))) score += 15;
     if (lower.includes("contact") || lower.includes("contacto") || lower.includes("kontakt")) score += 6;
 
     const oemHit = OEM_KEYWORDS.some((kw) => hostLower.includes(kw) || lower.includes(kw));
