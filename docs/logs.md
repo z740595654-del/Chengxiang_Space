@@ -200,3 +200,20 @@
   - 部署后分别访问 /api/leads 与 /leads（含 q/keyword、limit/num、start 组合）验证返回结构；确认前端 leads.html 点击“开始抓取”不再出现 404。
 - 原计算/逻辑：仅 /api/leads 路由，参数只识别 q 与 limit（上限 20），未处理 keyword/num/start，404 发生在 /leads 请求；响应结构已为 { ok:true, results }。
 - 改动后计算/逻辑：/api/leads 与 /leads 共用处理器，接受 q 或 keyword、limit 或 num（上限 10）、可选 country 与 start，缺参返回 400；保持 Google CSE 搜索并抓取最多 2 页联系方式，统一 CORS/404 响应，/enrich 返回占位 JSON。
+
+## 2025-12-09 21:30 北京时间
+- 操作：Lead Finder 完整升级，修复 Pages /leads 显示源码问题并分离前后端职责。
+- 新增点：
+  - 后端新增渠道优先模板、多语言自动选择、分批 Google CSE 拉取与 OEM 域名黑名单过滤；增加 score/tags/meta、/enrich 多语言抓取与邮箱电话评分，并支持 enrich 批量补全。
+  - 前端 leads.html 重写为浏览器端页面，包含进度条、阶段文案、并发逐条补全和 CSV 导出，默认 dealer 模式自动调用 /api/leads 与 /enrich。
+  - meta 输出统计 raw/filtered/enriched，CORS 与 404 统一化。
+- 删除点：移除 leads.html 中的 Worker 入口与 Env 依赖，避免被 Pages 作为静态文本暴露。
+- 修改点：
+  - 路由支持 /api/leads、/leads、/enrich 及 OPTIONS 204；参数兼容 q/keyword、limit/num、country、start、mode、lang、enrich。
+  - 查询构造在 dealer 模式强制叠加多语言渠道模板，limit>10 分两批 start=1/11；dealer 低于阈值直接丢弃，general 仅返回 score。
+  - enrich 路径与批量补全使用多语言联系页路径库，邮箱/电话正则保持宽松，同时加入邮箱/电话评分字段。
+- 风险点：Google CSE 配额或网络超时可能导致搜索结果不足；外站反爬会导致联系方式抓取失败，仅保留基础信息。
+- 建议：上线后在西班牙/德国等国家分别调用 /api/leads 与 /enrich 核对 OEM 过滤与评分效果，确认 Pages /leads 页面呈现新的前端 UI。
+- 原计算/逻辑：旧版仅单一查询、无渠道模板、无 OEM 过滤、无 score 与 enrich 批量补全；leads.html 为 Worker 风格 JS 被 Pages 直接展示源码。
+- 改动后计算/逻辑：dealer 模式查询 = (渠道模板 OR 组合)+用户词+国家，支持两批拉取；结果打分并过滤 OEM 与低分，必要时再逐条 /enrich 抓取联系页并给出邮箱/电话评分；leads.html 仅做前端渲染与并发补全，不再包含 Worker 逻辑。
+- 事件原因说明：Pages 会将 /leads 路径映射到 /leads.html，原文件是 Worker JS，因此被静态方式直接展示源码；现已通过前端 HTML 重写解决。

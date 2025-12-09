@@ -1,262 +1,342 @@
-/**
- * @typedef {Object} Env
- * @property {string} GOOGLE_API_KEY
- * @property {string} GOOGLE_CSE_ID
- */
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lead Finder</title>
+  <style>
+    :root {
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: #0f172a;
+      background: #f8fafc;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: radial-gradient(circle at 20% 20%, rgba(59,130,246,0.08), transparent 35%),
+        radial-gradient(circle at 80% 0%, rgba(16,185,129,0.08), transparent 25%),
+        #f8fafc;
+    }
+    .page {
+      max-width: 1080px;
+      margin: 0 auto;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 28px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    h1 span {
+      display: inline-flex;
+      padding: 6px 10px;
+      background: #e0f2fe;
+      color: #0284c7;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    p.sub {
+      margin: 0 0 20px;
+      color: #475569;
+      line-height: 1.5;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      box-shadow: 0 10px 35px rgba(15, 23, 42, 0.06);
+      padding: 18px;
+      margin-bottom: 20px;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #0f172a;
+    }
+    input, select, button {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #cbd5e1;
+      font-size: 14px;
+    }
+    input:focus, select:focus {
+      outline: 2px solid #2563eb33;
+      border-color: #2563eb;
+    }
+    button.primary {
+      background: linear-gradient(120deg, #2563eb, #1d4ed8);
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      transition: transform 0.1s ease, box-shadow 0.2s ease;
+      box-shadow: 0 10px 25px rgba(37, 99, 235, 0.25);
+    }
+    button.primary:hover { transform: translateY(-1px); }
+    button.primary:active { transform: translateY(0); }
+    button.secondary {
+      background: #e2e8f0;
+      color: #0f172a;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+    }
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .progress {
+      margin-top: 14px;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 10px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .progress-bar span {
+      display: block;
+      height: 10px;
+      width: 0;
+      background: linear-gradient(120deg, #10b981, #22c55e);
+      transition: width 0.2s ease;
+    }
+    .stage {
+      margin-top: 6px;
+      color: #475569;
+      font-size: 13px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 13px;
+    }
+    th { background: #f1f5f9; font-weight: 700; }
+    tr:hover { background: #f8fafc; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #f1f5f9;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      color: #0f172a;
+    }
+    .muted { color: #94a3b8; }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: #475569;
+    }
+    .status .dot {
+      width: 10px;
+      height: 10px;
+      background: #22c55e;
+      border-radius: 50%;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="card">
+      <h1>Lead Finder <span>前端版</span></h1>
+      <p class="sub">聚焦叉车与物料搬运渠道线索。先拉取基础结果，再逐条补全联系方式（并发 3 条）。</p>
+      <div class="form-grid">
+        <div>
+          <label for="q">关键词</label>
+          <input id="q" placeholder="例如：forklift" />
+        </div>
+        <div>
+          <label for="country">Country</label>
+          <input id="country" placeholder="例如：Spain" />
+        </div>
+        <div>
+          <label for="limit">数量 (1-20)</label>
+          <input id="limit" type="number" min="1" max="20" value="10" />
+        </div>
+      </div>
+      <div class="toolbar">
+        <button class="primary" id="startBtn">开始抓取</button>
+        <button class="secondary" id="exportBtn" disabled>导出 CSV</button>
+        <span class="status" id="status"><span class="dot"></span><span id="statusText">待开始</span></span>
+      </div>
+      <div class="progress">
+        <div class="progress-bar"><span id="progressInner"></span></div>
+        <div class="stage" id="stageText">等待开始...</div>
+      </div>
+    </div>
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET,OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-};
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Country</th>
+            <th>Company</th>
+            <th>Website</th>
+            <th>City</th>
+            <th>Phone</th>
+            <th>Email</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="6" class="muted">尚无数据</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 
-const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-// 宽松电话匹配：+ 数字/空格/()/.-
-const phoneRegex = /(\+?\d[\d\s().-]{6,}\d)/g;
+  <script>
+    const tbody = document.getElementById('tbody');
+    const startBtn = document.getElementById('startBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const statusText = document.getElementById('statusText');
+    const progressInner = document.getElementById('progressInner');
+    const stageText = document.getElementById('stageText');
 
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      ...CORS_HEADERS,
-    },
-  });
-}
+    let leads = [];
 
-export default {
-  /**
-   * @param {Request} request
-   * @param {Env} env
-   */
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    const path = url.pathname;
-
-    if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: CORS_HEADERS });
+    function setStage(text) {
+      stageText.textContent = text;
     }
 
-    // ✅ 只实现一个明确入口
-    if (request.method === "GET" && path === "/api/leads") {
-      return handleLeads(url, env);
+    function setProgress(done, total) {
+      const pct = total ? Math.round((done / total) * 100) : 0;
+      progressInner.style.width = `${pct}%`;
+      setStage(`补全进度：${done}/${total}`);
     }
 
-    return json({ ok: false, message: "Not found" }, 404);
-  },
-};
+    function renderRows(data) {
+      if (!data.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="muted">尚无数据</td></tr>';
+        return;
+      }
+      tbody.innerHTML = '';
+      for (const row of data) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.country || ''}</td>
+          <td>${row.company || ''}</td>
+          <td><a href="https://${row.website}" target="_blank" rel="noopener">${row.website}</a></td>
+          <td>${row.city || ''}</td>
+          <td>${row.phone || ''}</td>
+          <td>${row.email || ''}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
 
-/**
- * @param {URL} url
- * @param {Env} env
- */
-async function handleLeads(url, env) {
-  const q = (url.searchParams.get("q") || "").trim();
-  const country = (url.searchParams.get("country") || "").trim();
-  const limitRaw = parseInt(url.searchParams.get("limit") || "10", 10);
-  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 20) : 10;
+    async function fetchLeads() {
+      const q = document.getElementById('q').value.trim();
+      const country = document.getElementById('country').value.trim();
+      const limit = document.getElementById('limit').value || '10';
+      if (!q) {
+        alert('请先填写关键词');
+        return;
+      }
 
-  if (!q) return json({ ok: false, message: "Missing q" }, 400);
-  if (!env.GOOGLE_API_KEY || !env.GOOGLE_CSE_ID) {
-    return json({ ok: false, message: "Missing GOOGLE_API_KEY / GOOGLE_CSE_ID" }, 500);
-  }
+      startBtn.disabled = true;
+      exportBtn.disabled = true;
+      statusText.textContent = '抓取中...';
+      progressInner.style.width = '0%';
+      setStage('发起搜索...');
 
-  // Google CSE 单次最多 num=10
-  const targets = await cseSearch(q, limit, env);
+      try {
+        const resp = await fetch(`/api/leads?q=${encodeURIComponent(q)}&country=${encodeURIComponent(country)}&limit=${encodeURIComponent(limit)}&mode=dealer&lang=auto&enrich=0`);
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.message || '接口异常');
+        leads = data.results || [];
+        renderRows(leads);
+        statusText.textContent = `基础完成 (${leads.length} 条)`;
+        setStage('逐条补全联系方式...');
+        await enrichAll(leads, country);
+      } catch (err) {
+        console.error(err);
+        alert(err.message || '抓取失败');
+        statusText.textContent = '失败';
+      } finally {
+        startBtn.disabled = false;
+      }
+    }
 
-  /** @type {Array<any>} */
-  const results = [];
+    async function enrichAll(list, country) {
+      if (!list.length) {
+        setStage('无可补全的数据');
+        return;
+      }
+      const total = list.length;
+      let done = 0;
+      setProgress(0, total);
 
-  // 为了稳一点，顺序抓（避免并发太猛）
-  for (const item of targets) {
-    try {
-      const link = item.link;
-      const hostname = safeHostname(link);
-      if (!hostname) continue;
-
-      const company = normalizeCompany(item.title, hostname);
-
-      const { email, phone } = await extractContacts(hostname, link);
-
-      results.push({
-        country,
-        company,
-        website: hostname,
-        city: "",
-        phone: phone || "",
-        email: email || "",
-        sourceUrl: link,
+      const queue = [...list.keys()];
+      const workers = Array.from({ length: 3 }).map(async () => {
+        while (queue.length) {
+          const idx = queue.shift();
+          if (idx === undefined) break;
+          const lead = list[idx];
+          try {
+            const res = await fetch(`/enrich?website=${encodeURIComponent(lead.website)}&lang=${encodeURIComponent('auto')}&country=${encodeURIComponent(country)}`);
+            const data = await res.json();
+            if (data.ok && data.result) {
+              lead.phone = data.result.phone || lead.phone;
+              lead.email = data.result.email || lead.email;
+            }
+          } catch (e) {
+            console.warn('enrich failed', lead.website, e);
+          }
+          done += 1;
+          setProgress(done, total);
+          renderRows(list);
+        }
       });
-    } catch {
-      // 单条失败不影响整体
-    }
-  }
-
-  return json({ ok: true, results });
-}
-
-/**
- * @param {string} q
- * @param {number} limit
- * @param {Env} env
- */
-async function cseSearch(q, limit, env) {
-  const all = [];
-  const firstBatch = Math.min(limit, 10);
-  const secondBatch = limit > 10 ? Math.min(limit - 10, 10) : 0;
-
-  const batch1 = await cseFetch(q, 1, firstBatch, env);
-  all.push(...batch1);
-
-  if (secondBatch > 0) {
-    const batch2 = await cseFetch(q, 11, secondBatch, env);
-    all.push(...batch2);
-  }
-
-  return all;
-}
-
-/**
- * @param {string} q
- * @param {number} start
- * @param {number} num
- * @param {Env} env
- */
-async function cseFetch(q, start, num, env) {
-  const api = new URL("https://www.googleapis.com/customsearch/v1");
-  api.searchParams.set("key", env.GOOGLE_API_KEY);
-  api.searchParams.set("cx", env.GOOGLE_CSE_ID);
-  api.searchParams.set("q", q);
-  api.searchParams.set("start", String(start));
-  api.searchParams.set("num", String(num));
-
-  const resp = await fetch(api.toString());
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => "");
-    throw new Error(`CSE error ${resp.status} ${text.slice(0, 120)}`);
-  }
-
-  const data = await resp.json();
-  return Array.isArray(data.items) ? data.items : [];
-}
-
-/**
- * @param {string} link
- */
-function safeHostname(link) {
-  try {
-    return new URL(link).hostname;
-  } catch {
-    return "";
-  }
-}
-
-/**
- * @param {string} title
- * @param {string} hostname
- */
-function normalizeCompany(title, hostname) {
-  const t = (title || "").trim();
-  if (t) return t;
-  return hostname.replace(/^www\./, "");
-}
-
-/**
- * 抓取最多 2 个页面做邮箱/电话提取
- * @param {string} hostname
- * @param {string} seedLink
- */
-async function extractContacts(hostname, seedLink) {
-  const candidates = uniqueUrls([
-    seedLink,
-    `https://${hostname}/`,
-    `https://${hostname}/contact`,
-    `https://${hostname}/contact-us`,
-    `https://${hostname}/about`,
-    `https://${hostname}/about-us`,
-  ]);
-
-  let email = "";
-  let phone = "";
-  let successCount = 0;
-
-  for (const u of candidates) {
-    if (successCount >= 2) break;
-
-    const html = await tryFetchText(u);
-    if (!html) continue;
-
-    successCount++;
-
-    if (!email) {
-      const emails = html.match(emailRegex) || [];
-      email = pickFirstReasonableEmail(emails);
+      await Promise.all(workers);
+      statusText.textContent = '全部完成';
+      exportBtn.disabled = false;
     }
 
-    if (!phone) {
-      const phones = html.match(phoneRegex) || [];
-      phone = pickFirstReasonablePhone(phones);
+    function exportCSV() {
+      if (!leads.length) return;
+      const header = ['country', 'company', 'website', 'city', 'phone', 'email'];
+      const rows = leads.map((r) => header.map((h) => (r[h] || '')).join(','));
+      const csv = [header.join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'leads.csv';
+      a.click();
+      URL.revokeObjectURL(url);
     }
 
-    if (email && phone) break;
-  }
-
-  return { email, phone };
-}
-
-/**
- * @param {string} url
- */
-async function tryFetchText(url) {
-  try {
-    const resp = await fetch(url, {
-      cf: { cacheTtl: 0 },
-      headers: { "Accept": "text/html,*/*" },
-    });
-    if (!resp.ok) return "";
-    const ct = resp.headers.get("content-type") || "";
-    if (!ct.includes("text/html")) {
-      // 有些站点首页是别的类型，仍允许读一点
-    }
-    return await resp.text();
-  } catch {
-    return "";
-  }
-}
-
-/**
- * @param {string[]} urls
- */
-function uniqueUrls(urls) {
-  const set = new Set();
-  const out = [];
-  for (const u of urls) {
-    if (!u) continue;
-    if (set.has(u)) continue;
-    set.add(u);
-    out.push(u);
-  }
-  return out;
-}
-
-function pickFirstReasonableEmail(emails) {
-  for (const e of emails) {
-    const v = String(e).toLowerCase();
-    if (v.includes("example.com")) continue;
-    if (v.length > 80) continue;
-    return e;
-  }
-  return "";
-}
-
-function pickFirstReasonablePhone(phones) {
-  for (const p of phones) {
-    const v = String(p);
-    // 过滤明显的年份/过短数字串
-    const digits = v.replace(/\D/g, "");
-    if (digits.length < 7) continue;
-    if (digits.length > 20) continue;
-    return v.trim();
-  }
-  return "";
-}
+    startBtn.addEventListener('click', fetchLeads);
+    exportBtn.addEventListener('click', exportCSV);
+  </script>
+</body>
+</html>
