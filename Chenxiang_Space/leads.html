@@ -290,7 +290,11 @@
         leads = data.results || [];
         renderRows(leads);
         statusText.textContent = usedMode === 'dealer' ? `基础完成 (${leads.length} 条)` : `基础完成 (${leads.length} 条，raw 降级)`;
-        setStage('逐条补全联系方式...');
+        const thresholdHint =
+          usedMode === 'dealer' && data.meta && typeof data.meta.usedScoreThreshold !== 'undefined'
+            ? `（本次阈值=${data.meta.usedScoreThreshold}）`
+            : '';
+        setStage(`逐条补全联系方式...${thresholdHint}`);
         await enrichAll(leads, country);
       } catch (err) {
         console.error(err);
