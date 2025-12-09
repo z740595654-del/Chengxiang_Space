@@ -182,8 +182,11 @@ async function handleLeads(url, env) {
         let results = candidates;
 
         if (mode === "dealer") {
+            meta.fallbackScoreThresholdApplied = false;
             const primaryFiltered = candidates.filter((lead) => lead.score >= scoreThreshold);
-            meta.filteredByScore = candidates.length - primaryFiltered.length;
+
+            let finalFiltered = primaryFiltered;
+
             if (
                 primaryFiltered.length === 0 &&
                 candidates.length > 0 &&
@@ -191,16 +194,18 @@ async function handleLeads(url, env) {
             ) {
                 const fallbackFiltered = candidates.filter((lead) => lead.score >= NON_EN_DEALER_THRESHOLD);
                 if (fallbackFiltered.length > 0) {
-                    results = fallbackFiltered;
+                    finalFiltered = fallbackFiltered;
                     appliedThreshold = NON_EN_DEALER_THRESHOLD;
                     meta.fallbackScoreThresholdApplied = true;
-                } else {
-                    results = primaryFiltered;
                 }
-            } else {
-                results = primaryFiltered;
             }
+
+            meta.filteredByScore = meta.fallbackScoreThresholdApplied
+                ? candidates.length - finalFiltered.length
+                : candidates.length - primaryFiltered.length;
+
             meta.usedScoreThreshold = appliedThreshold;
+            results = finalFiltered;
         }
 
         results = results.slice(0, limit);
