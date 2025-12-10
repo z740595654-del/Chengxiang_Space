@@ -297,6 +297,7 @@
         <div>
           <div class="metric-label">💰 目前余额</div>
           <div class="metric-value" id="valBalance">¥0.00</div>
+          <div class="label" id="valBalanceHint"></div>
         </div>
         <div style="text-align: right">
           <div class="metric-label">🧨 广发欠款（估算）</div>
@@ -361,12 +362,14 @@
       </div>
       <div class="grid-2">
         <div>
-          <label class="label">目前余额（钱包总和）</label>
-          <input type="number" id="cfgBalance" placeholder="比如 1200" />
-        </div>
-        <div>
           <label class="label">广发信用卡欠款估算</label>
           <input type="number" id="cfgGfDebt" placeholder="例如 10000" />
+        </div>
+        <div>
+          <label class="label">余额锚点说明</label>
+          <div class="label" style="line-height: 1.45">
+            在交易列表中添加一条 account=BALANCE_ANCHOR 的交易作为余额锚点，金额即为基准余额。
+          </div>
         </div>
       </div>
       <div class="grid-2">
@@ -589,12 +592,12 @@
 
   <script>
     const LEDGER_API_BASE = "https://czbpght.cn/ledger";
+    const BALANCE_ANCHOR_ACCOUNT = "BALANCE_ANCHOR";
 
     let appState = {
       settings: {
         period_start: 10,
         total_budget: 3500,
-        current_balance: 0,
         gf_debt: 0,
       },
       scope: "current", // current | all | period:YYYY-MM-DD
@@ -602,11 +605,6 @@
       transactions: [],
       period: { start: "", end: "", days: 0 },
       today: new Date().toISOString().split("T")[0],
-      balanceBase: {
-        value: null,
-        date: null,
-        tx_id: null,
-      }, // 余额锚点：设定余额时的数值 + 最后一笔交易（用于同日去重）
       excludedTxIds: [], // 被剔除的大额消费 tx_id 列表
       periodChoices: [], // 数据中存在的所有账期
       lastBScope: [], // 最近一次用于图表的 B 口径数据
@@ -651,6 +649,9 @@
     function sumAmount(list) {
       return list.reduce((s, t) => s + (Number(t.amount) || 0), 0);
     }
+    function isBalanceAnchor(tx) {
+      return tx && tx.account === BALANCE_ANCHOR_ACCOUNT;
+    }
     function normalizeDateInput(str) {
       if (!str) return str;
       let s = String(str).trim();
@@ -681,6 +682,31 @@
       return isNaN(n) ? null : n;
     }
 
+    function findLatestBalanceAnchor(txs) {
+      const anchors = txs.filter(isBalanceAnchor);
+      if (!anchors.length) return null;
+      anchors.sort((a, b) => {
+        if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+        const aSeq = getTxSeq(a.tx_id);
+        const bSeq = getTxSeq(b.tx_id);
+        if (aSeq !== null && bSeq !== null) return aSeq - bSeq;
+        if (aSeq === null && bSeq === null)
+          return (a.tx_id || "") < (b.tx_id || "") ? -1 : 1;
+        return aSeq === null ? -1 : 1;
+      });
+      return anchors[anchors.length - 1];
+    }
+
+    function isTxAfterAnchor(tx, anchor) {
+      if (tx.date > anchor.date) return true;
+      if (tx.date < anchor.date) return false;
+      const txSeq = getTxSeq(tx.tx_id);
+      const anchorSeq = getTxSeq(anchor.tx_id);
+      if (txSeq !== null && anchorSeq !== null) return txSeq > anchorSeq;
+      if (anchor.tx_id && tx.tx_id) return tx.tx_id > anchor.tx_id;
+      return false;
+    }
+
     /* ========== 配置初始化 ========== */
     function initSettings() {
       try {
@@ -691,8 +717,6 @@
             appState.settings.period_start = s.period_start;
           if (typeof s.total_budget === "number")
             appState.settings.total_budget = s.total_budget;
-          if (typeof s.current_balance === "number")
-            appState.settings.current_balance = s.current_balance;
           if (typeof s.gf_debt === "number")
             appState.settings.gf_debt = s.gf_debt;
         }
@@ -702,17 +726,6 @@
 
       let scope = localStorage.getItem("ledger_scope") || "current";
       appState.scope = scope;
-
-      // 余额锚点
-      const baseValStr = localStorage.getItem("ledger_balance_base_value");
-      const baseDate = localStorage.getItem("ledger_balance_base_date");
-      const baseTxId = localStorage.getItem("ledger_balance_base_txid");
-      if (baseValStr !== null && baseDate) {
-        const n = parseFloat(baseValStr);
-        if (!isNaN(n)) {
-          appState.balanceBase = { value: n, date: baseDate, tx_id: baseTxId };
-        }
-      }
 
       // 剔除的大额 tx_id 列表
       try {
@@ -730,8 +743,6 @@
         appState.settings.period_start;
       document.getElementById("cfgBudget").value =
         appState.settings.total_budget;
-      document.getElementById("cfgBalance").value =
-        appState.settings.current_balance || "";
       document.getElementById("cfgGfDebt").value =
         appState.settings.gf_debt || "";
       document.getElementById("cfgKey").value = key;
@@ -746,7 +757,6 @@
         10
       );
       const budget = parseFloat(document.getElementById("cfgBudget").value);
-      const bal = parseFloat(document.getElementById("cfgBalance").value);
       const gf = parseFloat(document.getElementById("cfgGfDebt").value);
       const key = (document.getElementById("cfgKey").value || "").trim();
       const scopeVal = document.getElementById("cfgScope").value || "current";
@@ -754,7 +764,6 @@
       appState.settings = {
         period_start: isNaN(start) ? 10 : start,
         total_budget: isNaN(budget) ? 3500 : budget,
-        current_balance: isNaN(bal) ? 0 : bal,
         gf_debt: isNaN(gf) ? 0 : gf,
       };
       appState.ledgerKey = key;
@@ -767,59 +776,33 @@
       localStorage.setItem("ledger_key", key);
       localStorage.setItem("ledger_scope", scopeVal);
 
-      // 重新设定余额锚点：以当前已存在的最新一笔交易为锚点
-      if (!isNaN(bal)) {
-        let anchorDate = appState.today;
-        let anchorTxId = null;
-        if (appState.transactions.length) {
-          // 数据已按日期倒序返回，第一条视为最新交易
-          anchorDate = appState.transactions[0].date;
-          anchorTxId = appState.transactions[0].tx_id || null;
-          // 若存在日期相同但排序在后的交易，保持锚点使用第一条，避免同日重复计算
-        }
-        appState.balanceBase = { value: bal, date: anchorDate, tx_id: anchorTxId };
-        localStorage.setItem("ledger_balance_base_value", String(bal));
-        localStorage.setItem("ledger_balance_base_date", anchorDate);
-        if (anchorTxId) {
-          localStorage.setItem("ledger_balance_base_txid", anchorTxId);
-        } else {
-          localStorage.removeItem("ledger_balance_base_txid");
-        }
-      }
-
       toggleConfig();
       loadTransactions();
     }
 
     /* ========== 顶部资产卡：余额 & 广发 ========== */
     function renderAssets() {
-      let displayBal = appState.settings.current_balance || 0;
+      let displayBal = 0;
+      const balanceHint = document.getElementById("valBalanceHint");
+      if (balanceHint) balanceHint.textContent = "";
 
-      // 如果有余额锚点，就根据锚点 + 后续流水自动滚动
-      const base = appState.balanceBase;
-      const baseSeq = getTxSeq(base && base.tx_id);
-      if (base && base.value != null && base.date && appState.transactions.length) {
+      const anchor = findLatestBalanceAnchor(appState.transactions);
+      if (anchor) {
+        const baseBalance = Number(anchor.amount) || 0;
         let delta = 0;
         for (const tx of appState.transactions) {
-          const isAfterBaseDate = tx.date > base.date;
-          const txSeq = getTxSeq(tx.tx_id);
-          const seqGreater =
-            baseSeq !== null && txSeq !== null
-              ? txSeq > baseSeq
-              : !base.tx_id || (tx.tx_id && tx.tx_id > base.tx_id);
-          const isSameDayLaterTx =
-            !isAfterBaseDate && tx.date === base.date && seqGreater;
-
-          if (isAfterBaseDate || isSameDayLaterTx) {
-            if (tx.category_level1 === "收入") {
-              delta += tx.amount;
-            } else {
-              // 简化逻辑：除了收入，其他一律视为支出
-              delta -= tx.amount;
-            }
+          if (isBalanceAnchor(tx)) continue;
+          if (!isTxAfterAnchor(tx, anchor)) continue;
+          if (tx.category_level1 === "收入") {
+            delta += tx.amount;
+          } else {
+            delta -= tx.amount;
           }
         }
-        displayBal = base.value + delta;
+        displayBal = baseBalance + delta;
+      } else {
+        displayBal = 0;
+        if (balanceHint) balanceHint.textContent = "未设置余额锚点";
       }
 
       const gf = appState.settings.gf_debt || 0;
@@ -923,7 +906,7 @@
     }
 
     function rebuildPeriodOptions() {
-      const txs = appState.transactions;
+      const txs = getStatTransactions();
       const sel = document.getElementById("cfgScope");
       if (!sel) return;
 
@@ -985,16 +968,18 @@
       const scope = appState.scope;
       const labelEl = document.getElementById("periodDate");
 
-      if (!appState.transactions.length) {
+      const statTxs = getStatTransactions();
+
+      if (!statTxs.length) {
         appState.period = { start: "", end: "", days: 0 };
         labelEl.innerText = "当前暂无交易数据";
         return;
       }
 
       if (scope === "all") {
-        let minDateStr = appState.transactions[0].date;
-        let maxDateStr = appState.transactions[0].date;
-        for (const tx of appState.transactions) {
+        let minDateStr = statTxs[0].date;
+        let maxDateStr = statTxs[0].date;
+        for (const tx of statTxs) {
           if (tx.date < minDateStr) minDateStr = tx.date;
           if (tx.date > maxDateStr) maxDateStr = tx.date;
         }
@@ -1076,8 +1061,13 @@
       );
     }
 
+    function getStatTransactions() {
+      return appState.transactions.filter((tx) => !isBalanceAnchor(tx));
+    }
+
     function filterBBase(list) {
       return list.filter((tx) => {
+        if (isBalanceAnchor(tx)) return false;
         if (["收入", "还款", "往来"].includes(tx.category_level1))
           return false;
         if (tx.is_xiaoe) return false;
@@ -1130,9 +1120,10 @@
 
     /* ========== 主渲染逻辑 ========== */
     function renderAll() {
-      const periodTx = appState.transactions.filter(inCurrentPeriod);
+      const statTxs = getStatTransactions();
+      const periodTx = statTxs.filter(inCurrentPeriod);
       const bBase = filterBBase(periodTx); // 原始 B 口径（含大额）
-      const ledgerBBase = filterBBase(appState.transactions); // 全量账本 B 口径
+      const ledgerBBase = filterBBase(statTxs); // 全量账本 B 口径
       const bData = bBase.filter((tx) => !isExcluded(tx)); // 真正参与预算的 B 口径
 
       appState.lastBScope = bData;
@@ -1727,7 +1718,7 @@ function classifyCategory(tx) {
     }
 
     function showDayDetail(dateStr) {
-      const list = appState.transactions.filter(
+      const list = getStatTransactions().filter(
         (t) => t.date === dateStr && inCurrentPeriod(t)
       );
       const dayDetail = document.getElementById("dayDetail");
