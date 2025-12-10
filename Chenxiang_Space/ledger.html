@@ -649,6 +649,9 @@
     function sumAmount(list) {
       return list.reduce((s, t) => s + (Number(t.amount) || 0), 0);
     }
+    function isBalanceAnchor(tx) {
+      return tx && tx.account === BALANCE_ANCHOR_ACCOUNT;
+    }
     function normalizeDateInput(str) {
       if (!str) return str;
       let s = String(str).trim();
@@ -680,7 +683,7 @@
     }
 
     function findLatestBalanceAnchor(txs) {
-      const anchors = txs.filter((tx) => tx.account === BALANCE_ANCHOR_ACCOUNT);
+      const anchors = txs.filter(isBalanceAnchor);
       if (!anchors.length) return null;
       anchors.sort((a, b) => {
         if (a.date !== b.date) return a.date < b.date ? -1 : 1;
@@ -788,7 +791,7 @@
         const baseBalance = Number(anchor.amount) || 0;
         let delta = 0;
         for (const tx of appState.transactions) {
-          if (tx.account === BALANCE_ANCHOR_ACCOUNT) continue;
+          if (isBalanceAnchor(tx)) continue;
           if (!isTxAfterAnchor(tx, anchor)) continue;
           if (tx.category_level1 === "收入") {
             delta += tx.amount;
@@ -903,7 +906,7 @@
     }
 
     function rebuildPeriodOptions() {
-      const txs = appState.transactions;
+      const txs = getStatTransactions();
       const sel = document.getElementById("cfgScope");
       if (!sel) return;
 
@@ -965,16 +968,18 @@
       const scope = appState.scope;
       const labelEl = document.getElementById("periodDate");
 
-      if (!appState.transactions.length) {
+      const statTxs = getStatTransactions();
+
+      if (!statTxs.length) {
         appState.period = { start: "", end: "", days: 0 };
         labelEl.innerText = "当前暂无交易数据";
         return;
       }
 
       if (scope === "all") {
-        let minDateStr = appState.transactions[0].date;
-        let maxDateStr = appState.transactions[0].date;
-        for (const tx of appState.transactions) {
+        let minDateStr = statTxs[0].date;
+        let maxDateStr = statTxs[0].date;
+        for (const tx of statTxs) {
           if (tx.date < minDateStr) minDateStr = tx.date;
           if (tx.date > maxDateStr) maxDateStr = tx.date;
         }
@@ -1056,8 +1061,13 @@
       );
     }
 
+    function getStatTransactions() {
+      return appState.transactions.filter((tx) => !isBalanceAnchor(tx));
+    }
+
     function filterBBase(list) {
       return list.filter((tx) => {
+        if (isBalanceAnchor(tx)) return false;
         if (["收入", "还款", "往来"].includes(tx.category_level1))
           return false;
         if (tx.is_xiaoe) return false;
@@ -1110,9 +1120,10 @@
 
     /* ========== 主渲染逻辑 ========== */
     function renderAll() {
-      const periodTx = appState.transactions.filter(inCurrentPeriod);
+      const statTxs = getStatTransactions();
+      const periodTx = statTxs.filter(inCurrentPeriod);
       const bBase = filterBBase(periodTx); // 原始 B 口径（含大额）
-      const ledgerBBase = filterBBase(appState.transactions); // 全量账本 B 口径
+      const ledgerBBase = filterBBase(statTxs); // 全量账本 B 口径
       const bData = bBase.filter((tx) => !isExcluded(tx)); // 真正参与预算的 B 口径
 
       appState.lastBScope = bData;
@@ -1707,7 +1718,7 @@ function classifyCategory(tx) {
     }
 
     function showDayDetail(dateStr) {
-      const list = appState.transactions.filter(
+      const list = getStatTransactions().filter(
         (t) => t.date === dateStr && inCurrentPeriod(t)
       );
       const dayDetail = document.getElementById("dayDetail");
