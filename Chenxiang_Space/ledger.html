@@ -433,6 +433,16 @@
       <div id="dayDetail" class="label" style="margin-top: 6px"></div>
     </div>
 
+    <!-- 消费热力图 -->
+    <div class="card">
+      <div class="row">
+        <h3>🔥 消费热力图</h3>
+        <span class="label">颜色越深表示当日 B 口径消费越高</span>
+      </div>
+      <div id="heatmapDiv" style="width:100%; height: 220px"></div>
+      <div class="label" id="heatmapHint" style="margin-top: 6px"></div>
+    </div>
+
     <!-- 重点指标 + 饼图 -->
     <div class="card">
       <h3>📌 重点指标</h3>
@@ -645,6 +655,11 @@
       const m = String(d.getMonth() + 1).padStart(2, "0");
       const dd = String(d.getDate()).padStart(2, "0");
       return `${y}-${m}-${dd}`;
+    }
+    function parseYMDLocal(ymd) {
+      const [y, m, d] = (ymd || "").split("-").map(Number);
+      if (!y || !m || !d) return new Date(ymd);
+      return new Date(y, m - 1, d);
     }
     function sumAmount(list) {
       return list.reduce((s, t) => s + (Number(t.amount) || 0), 0);
@@ -1291,6 +1306,7 @@
         document.documentElement.getAttribute("data-theme") ||
         "dark";
       drawCharts(bData, theme === "light");
+      drawLedgerHeatmap(bData, theme === "light");
 
       const showB = document.getElementById("chkBscope").checked;
       const incomeTx = periodTx.filter((tx) => tx.category_level1 === "收入");
@@ -1715,6 +1731,102 @@ function classifyCategory(tx) {
         const dateStr = dates[idx];
         showDayDetail(dateStr);
       });
+    }
+
+    function drawLedgerHeatmap(bData, isLight) {
+      const div = document.getElementById("heatmapDiv");
+      const hint = document.getElementById("heatmapHint");
+      if (!div) return;
+
+      if (!Array.isArray(bData) || !bData.length) {
+        div.innerHTML = '<div class="label">当前范围内暂无 B 口径消费。</div>';
+        if (hint) hint.innerText = "";
+        return;
+      }
+
+      // 聚合每日金额
+      const daily = {};
+      bData.forEach((tx) => {
+        if (!tx.date) return;
+        if (tx.category_level1 === "收入") return;
+
+        const amt = Number(tx.amount || 0);
+        if (!Number.isFinite(amt) || amt <= 0) return;
+
+        daily[tx.date] = (daily[tx.date] || 0) + amt;
+      });
+
+      // 使用 renderAll 已计算好的 appState.period（本账期或全部账期）
+      const periodStart = parseYMDLocal(appState.period.start);
+      const periodEnd = parseYMDLocal(appState.period.end);
+
+      // 对齐到周一，做“周 x 星期”的格子
+      const startDow = (periodStart.getDay() + 6) % 7; // 0=Mon..6=Sun
+      const alignedStart = new Date(periodStart);
+      alignedStart.setDate(alignedStart.getDate() - startDow);
+
+      const totalDays =
+        Math.floor((periodEnd - alignedStart) / 86400000) + 1;
+      const weeks = Math.max(1, Math.ceil(totalDays / 7));
+
+      const dayLabels = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+
+      const z = Array.from({ length: 7 }, () =>
+        Array.from({ length: weeks }, () => null)
+      );
+      const text = Array.from({ length: 7 }, () =>
+        Array.from({ length: weeks }, () => "")
+      );
+
+      for (let w = 0; w < weeks; w++) {
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(alignedStart);
+          d.setDate(alignedStart.getDate() + w * 7 + i);
+
+          if (d < periodStart || d > periodEnd) continue;
+
+          const ds = formatDateLocal(d);
+          const amt = daily[ds] || 0;
+
+          z[i][w] = amt;
+          text[i][w] = `${ds}<br>¥${amt.toFixed(2)}`;
+        }
+      }
+
+      const textColor = isLight ? "#64748b" : "#cbd5f5";
+
+      const trace = {
+        type: "heatmap",
+        z,
+        x: Array.from({ length: weeks }, (_, i) => `W${i + 1}`),
+        y: dayLabels,
+        text,
+        hoverinfo: "text",
+        showscale: false,
+        xgap: 2,
+        ygap: 2,
+        colorscale: isLight ? "Blues" : "YlOrRd",
+      };
+
+      const layout = {
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        font: { color: textColor },
+        margin: { t: 8, l: 40, r: 10, b: 10 },
+        xaxis: { showgrid: false, showticklabels: false, zeroline: false },
+        yaxis: { showgrid: false, zeroline: false },
+      };
+
+      Plotly.newPlot("heatmapDiv", [trace], layout, {
+        displayModeBar: false,
+      });
+
+      if (hint) {
+        hint.innerText =
+          appState.scope === "all"
+            ? `范围：全部账期（${appState.period.start} ~ ${appState.period.end}）`
+            : `范围：${appState.period.start} ~ ${appState.period.end}`;
+      }
     }
 
     function showDayDetail(dateStr) {
