@@ -665,6 +665,13 @@
       return s;
     }
 
+    function parseDateStrict(str) {
+      const normalized = normalizeDateInput(str);
+      if (!normalized) return null;
+      const d = new Date(`${normalized}T00:00:00`);
+      return isNaN(d) ? null : d;
+    }
+
     function getTxSeq(txId) {
       if (!txId) return null;
       const str = String(txId);
@@ -901,9 +908,10 @@
     }
 
     function normalizeTx(t) {
+      const parsedDate = parseDateStrict(t.date);
       return {
         tx_id: t.tx_id || t.id || null,
-        date: t.date,
+        date: parsedDate ? formatDateLocal(parsedDate) : normalizeDateInput(t.date),
         amount: Number(t.amount),
         category_level1: t.category_level1 || "",
         category_level2: t.category_level2 || "",
@@ -1052,8 +1060,11 @@
       if (scope === "all") return true;
       const s = appState.period.start;
       const e = appState.period.end;
-      if (!s || !e) return true;
-      return tx.date >= s && tx.date <= e;
+      const startDate = parseDateStrict(s);
+      const endDate = parseDateStrict(e);
+      const txDate = parseDateStrict(tx.date);
+      if (!startDate || !endDate || !txDate) return false;
+      return txDate >= startDate && txDate <= endDate;
     }
 
     /* ========== B 口径 + 剔除大额 ========== */
