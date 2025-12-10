@@ -656,6 +656,11 @@
       const dd = String(d.getDate()).padStart(2, "0");
       return `${y}-${m}-${dd}`;
     }
+    function parseYMDLocal(ymd) {
+      const [y, m, d] = (ymd || "").split("-").map(Number);
+      if (!y || !m || !d) return new Date(ymd);
+      return new Date(y, m - 1, d);
+    }
     function sumAmount(list) {
       return list.reduce((s, t) => s + (Number(t.amount) || 0), 0);
     }
@@ -1743,12 +1748,17 @@ function classifyCategory(tx) {
       const daily = {};
       bData.forEach((tx) => {
         if (!tx.date) return;
-        daily[tx.date] = (daily[tx.date] || 0) + Number(tx.amount || 0);
+        if (tx.category_level1 === "收入") return;
+
+        const amt = Number(tx.amount || 0);
+        if (!Number.isFinite(amt) || amt <= 0) return;
+
+        daily[tx.date] = (daily[tx.date] || 0) + amt;
       });
 
       // 使用 renderAll 已计算好的 appState.period（本账期或全部账期）
-      const periodStart = new Date(appState.period.start);
-      const periodEnd = new Date(appState.period.end);
+      const periodStart = parseYMDLocal(appState.period.start);
+      const periodEnd = parseYMDLocal(appState.period.end);
 
       // 对齐到周一，做“周 x 星期”的格子
       const startDow = (periodStart.getDay() + 6) % 7; // 0=Mon..6=Sun
@@ -1814,7 +1824,7 @@ function classifyCategory(tx) {
       if (hint) {
         hint.innerText =
           appState.scope === "all"
-            ? "范围：全部账期聚合区间"
+            ? `范围：全部账期（${appState.period.start} ~ ${appState.period.end}）`
             : `范围：${appState.period.start} ~ ${appState.period.end}`;
       }
     }
