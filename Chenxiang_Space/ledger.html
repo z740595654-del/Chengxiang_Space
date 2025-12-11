@@ -1991,14 +1991,7 @@ function classifyCategory(tx) {
         alert("金额必填");
         return;
       }
-      const base = date.replace(/-/g, "");
-      const suffix = String(Math.floor(Math.random() * 10000)).padStart(
-        4,
-        "0"
-      );
-      const tx_id = `${base}-${suffix}`;
       const tx = {
-        tx_id,
         date,
         amount,
         category_level1: cat1,
