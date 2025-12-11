@@ -423,3 +423,17 @@
 - 建议：验证账期跨度较长且存在日期缺口时的刻度展示，确保离散日期顺序符合期望。
 - 原逻辑：X 轴未指定类型，Plotly 按时间轴渲染，可能插值或压缩日期点。
 - 改动后逻辑：显式使用 category 轴，以交易日期字符串为离散刻度，确保只展示实际数据对应的日期点。
+
+## 2025-12-11 16:57 北京时间
+- 操作：调整 burn chart 的横轴喂数与刻度渲染，消除 Plotly 日期时区偏移的悬浮提示问题。
+- 新增点：
+  - 增加 dayIdx 数组作为“第几天”索引，供 Plotly 作为 x 轴数值输入。
+  - traces 使用 text 挂载格式化日期，hover 直接展示 YYYY-MM-DD。
+- 删除点：不再依赖 Plotly 的 category 时间刻度与日期字符串直接作为 x 轴值。
+- 修改点：
+  - burn chart traces 的 x 改为 dayIdx 数组，tickvals/ticktext 使用 dayIdx 与 dates 显示刻度标签。
+  - layout xaxis 改为数值轴的自定义刻度模式（tickmode=array），保留倾斜刻度样式。
+- 风险点：当账期跨度特别大时，ticktext 全部渲染可能导致刻度拥挤，需要后续根据跨度调整取样或旋转角度。
+- 建议：在跨度超过数十天时观察刻度密度，如有重叠可改为按周取样或增加 hoveronly 交互提示。
+- 原计算/逻辑：burn chart 的 x 轴直接使用日期字符串并指定 category 类型，hovertemplate 读取 %{x}；Plotly 内部按时间轴处理导致 hover 显示含时区偏移的时间部分。
+- 改动后计算/逻辑：x 轴输入为 dayIdx 数值并通过 tickvals/ticktext 显示对应日期标签，hovertemplate 使用 %{text} 展示纯日期字符串，避免时间偏移。

@@ -1806,6 +1806,7 @@ function classifyCategory(tx) {
       const dates = [];
       const actual = [];
       const ideal = [];
+      const dayIdx = [];
 
       const totalBudgetB = (() => {
         if (appState.scope === "all") {
@@ -1822,6 +1823,7 @@ function classifyCategory(tx) {
         d.setDate(periodStart.getDate() + i);
         const ds = formatDateLocal(d);
         dates.push(ds);
+        dayIdx.push(i);
 
         cum += daily[i] || 0;
         actual.push(cum);
@@ -1836,23 +1838,25 @@ function classifyCategory(tx) {
         : "rgba(148,163,184,0.45)";
 
       const traceActual = {
-        x: dates,
+        x: dayIdx,
         y: actual,
         type: "scatter",
         mode: "lines",
         name: "实际累计支出",
         line: { width: 2 },
-        hovertemplate: "%{x}<br>累计支出：¥%{y:.2f}<extra></extra>",
+        text: dates,
+        hovertemplate: "%{text}<br>累计支出：¥%{y:.2f}<extra></extra>",
       };
 
       const traceIdeal = {
-        x: dates,
+        x: dayIdx,
         y: ideal,
         type: "scatter",
         mode: "lines",
         name: "理想累计支出",
         line: { width: 2, dash: "dot" },
-        hovertemplate: "%{x}<br>理想累计：¥%{y:.2f}<extra></extra>",
+        text: dates,
+        hovertemplate: "%{text}<br>理想累计：¥%{y:.2f}<extra></extra>",
       };
 
       const layout = {
@@ -1861,10 +1865,12 @@ function classifyCategory(tx) {
         font: { color: textColor },
         margin: { t: 8, l: 40, r: 10, b: 32 },
         xaxis: {
-          type: "category", // ★ 新增：按离散类别展示日期
           showgrid: false,
           zeroline: false,
-          tickangle: -45, // 日期多的时候再斜着显示
+          tickangle: -45,
+          tickmode: "array",
+          tickvals: dayIdx,
+          ticktext: dates,
         },
         yaxis: {
           showgrid: true,
