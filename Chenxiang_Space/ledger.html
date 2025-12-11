@@ -1861,9 +1861,10 @@ function classifyCategory(tx) {
         font: { color: textColor },
         margin: { t: 8, l: 40, r: 10, b: 32 },
         xaxis: {
+          type: "category", // ★ 新增：按离散类别展示日期
           showgrid: false,
           zeroline: false,
-          tickangle: -45,
+          tickangle: -45, // 日期多的时候再斜着显示
         },
         yaxis: {
           showgrid: true,
