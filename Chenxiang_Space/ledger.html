@@ -443,6 +443,15 @@
       <div class="label" id="heatmapHint" style="margin-top: 6px"></div>
     </div>
 
+    <!-- 预算燃尽曲线 -->
+    <div class="card">
+      <div class="row">
+        <h3>📉 预算燃尽曲线</h3>
+        <span class="label">蓝色=实际累计支出，虚线=理想累计支出</span>
+      </div>
+      <div id="burnChartDiv" style="width:100%; height: 260px"></div>
+    </div>
+
     <!-- 重点指标 + 饼图 -->
     <div class="card">
       <h3>📌 重点指标</h3>
@@ -1307,6 +1316,7 @@
         "dark";
       drawCharts(bData, theme === "light");
       drawLedgerHeatmap(bData, theme === "light");
+      drawBurnChart(bData, theme === "light");
 
       const showB = document.getElementById("chkBscope").checked;
       const incomeTx = periodTx.filter((tx) => tx.category_level1 === "收入");
@@ -1730,6 +1740,120 @@ function classifyCategory(tx) {
         const idx = evt.points[0].pointIndex;
         const dateStr = dates[idx];
         showDayDetail(dateStr);
+      });
+    }
+
+    function drawBurnChart(bData, isLight) {
+      const div = document.getElementById("burnChartDiv");
+      if (!div) return;
+
+      const periodStart = parseYMDLocal(appState.period.start);
+      const periodEnd = parseYMDLocal(appState.period.end);
+      const MS_PER_DAY = 86400000;
+      const totalDays =
+        Math.floor((periodEnd - periodStart) / MS_PER_DAY) + 1;
+
+      if (totalDays <= 0) {
+        div.innerHTML = '<div class="label">当前账期范围无效。</div>';
+        return;
+      }
+
+      // 汇总每日 B 口径支出
+      const daily = new Array(totalDays).fill(0);
+      if (Array.isArray(bData)) {
+        bData.forEach((tx) => {
+          if (!tx.date) return;
+          if (tx.category_level1 === "收入") return;
+
+          const amt = Number(tx.amount || 0);
+          if (!Number.isFinite(amt) || amt <= 0) return;
+
+          const d = parseYMDLocal(tx.date);
+          if (d < periodStart || d > periodEnd) return;
+
+          const idx = Math.floor((d - periodStart) / MS_PER_DAY);
+          if (idx < 0 || idx >= totalDays) return;
+
+          daily[idx] += amt;
+        });
+      }
+
+      const dates = [];
+      const actual = [];
+      const ideal = [];
+
+      const totalBudgetB = (() => {
+        if (appState.scope === "all") {
+          const info = calcGlobalPeriodInfo(bData);
+          if (info && Number.isFinite(info.totalBudgetAll))
+            return info.totalBudgetAll;
+        }
+        return appState.settings.total_budget || 0;
+      })();
+
+      let cum = 0;
+      for (let i = 0; i < totalDays; i++) {
+        const d = new Date(periodStart);
+        d.setDate(periodStart.getDate() + i);
+        const ds = formatDateLocal(d);
+        dates.push(ds);
+
+        cum += daily[i] || 0;
+        actual.push(cum);
+
+        const progress = (i + 1) / totalDays;
+        ideal.push(totalBudgetB * progress);
+      }
+
+      const textColor = isLight ? "#0f172a" : "#e2e8f0";
+      const gridColor = isLight
+        ? "rgba(148,163,184,0.25)"
+        : "rgba(148,163,184,0.45)";
+
+      const traceActual = {
+        x: dates,
+        y: actual,
+        type: "scatter",
+        mode: "lines",
+        name: "实际累计支出",
+        line: { width: 2 },
+        hovertemplate: "%{x}<br>累计支出：¥%{y:.2f}<extra></extra>",
+      };
+
+      const traceIdeal = {
+        x: dates,
+        y: ideal,
+        type: "scatter",
+        mode: "lines",
+        name: "理想累计支出",
+        line: { width: 2, dash: "dot" },
+        hovertemplate: "%{x}<br>理想累计：¥%{y:.2f}<extra></extra>",
+      };
+
+      const layout = {
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        font: { color: textColor },
+        margin: { t: 8, l: 40, r: 10, b: 32 },
+        xaxis: {
+          showgrid: false,
+          zeroline: false,
+          tickangle: -45,
+        },
+        yaxis: {
+          showgrid: true,
+          gridcolor: gridColor,
+          zeroline: false,
+        },
+        legend: {
+          orientation: "h",
+          x: 0,
+          y: 1.1,
+        },
+      };
+
+      Plotly.newPlot("burnChartDiv", [traceActual, traceIdeal], layout, {
+        displayModeBar: false,
       });
     }
 
