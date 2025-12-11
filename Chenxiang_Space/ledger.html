@@ -1753,17 +1753,6 @@ function classifyCategory(tx) {
       const totalDays =
         Math.floor((periodEnd - periodStart) / MS_PER_DAY) + 1;
 
-      const todayLocal = parseYMDLocal(formatDateLocal(new Date()));
-      let effectiveEnd = periodEnd;
-      if (todayLocal < periodStart) {
-        effectiveEnd = periodStart;
-      } else if (todayLocal < periodEnd) {
-        effectiveEnd = todayLocal;
-      }
-
-      const visibleDays =
-        Math.floor((effectiveEnd - periodStart) / MS_PER_DAY) + 1;
-
       if (totalDays <= 0) {
         div.innerHTML = '<div class="label">当前账期范围无效。</div>';
         return;
@@ -1803,7 +1792,7 @@ function classifyCategory(tx) {
       })();
 
       let cum = 0;
-      for (let i = 0; i < visibleDays; i++) {
+      for (let i = 0; i < totalDays; i++) {
         const d = new Date(periodStart);
         d.setDate(periodStart.getDate() + i);
         const ds = formatDateLocal(d);
