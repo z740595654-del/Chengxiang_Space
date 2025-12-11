@@ -1778,35 +1778,9 @@ function classifyCategory(tx) {
         });
       }
 
-      let visibleDays = totalDays;
-
-      // 先按数据找最后一个有支出的索引
-      let lastIdx = -1;
-      for (let i = 0; i < totalDays; i++) {
-        if (daily[i] > 0) lastIdx = i;
-      }
-
-      if (lastIdx >= 0) {
-        // 至少有一天有消费 → 画到最后一笔消费那天
-        visibleDays = lastIdx + 1;
-      } else {
-        // 完全没有消费 → 回退到“按今天 vs 账期”逻辑
-        const todayLocal = parseYMDLocal(formatDateLocal(new Date()));
-        let effectiveEnd = periodEnd;
-        if (todayLocal < periodStart) {
-          effectiveEnd = periodStart;
-        } else if (todayLocal < periodEnd) {
-          effectiveEnd = todayLocal;
-        }
-        visibleDays =
-          Math.floor((effectiveEnd - periodStart) / MS_PER_DAY) + 1;
-        if (visibleDays < 1) visibleDays = 1;
-      }
-
       const dates = [];
       const actual = [];
       const ideal = [];
-      const dayIdx = [];
 
       const totalBudgetB = (() => {
         if (appState.scope === "all") {
@@ -1818,12 +1792,11 @@ function classifyCategory(tx) {
       })();
 
       let cum = 0;
-      for (let i = 0; i < visibleDays; i++) {
+      for (let i = 0; i < totalDays; i++) {
         const d = new Date(periodStart);
         d.setDate(periodStart.getDate() + i);
         const ds = formatDateLocal(d);
         dates.push(ds);
-        dayIdx.push(i);
 
         cum += daily[i] || 0;
         actual.push(cum);
@@ -1838,25 +1811,23 @@ function classifyCategory(tx) {
         : "rgba(148,163,184,0.45)";
 
       const traceActual = {
-        x: dayIdx,
+        x: dates,
         y: actual,
         type: "scatter",
         mode: "lines",
         name: "实际累计支出",
         line: { width: 2 },
-        text: dates,
-        hovertemplate: "%{text}<br>累计支出：¥%{y:.2f}<extra></extra>",
+        hovertemplate: "%{x}<br>累计支出：¥%{y:.2f}<extra></extra>",
       };
 
       const traceIdeal = {
-        x: dayIdx,
+        x: dates,
         y: ideal,
         type: "scatter",
         mode: "lines",
         name: "理想累计支出",
         line: { width: 2, dash: "dot" },
-        text: dates,
-        hovertemplate: "%{text}<br>理想累计：¥%{y:.2f}<extra></extra>",
+        hovertemplate: "%{x}<br>理想累计：¥%{y:.2f}<extra></extra>",
       };
 
       const layout = {
@@ -1868,9 +1839,6 @@ function classifyCategory(tx) {
           showgrid: false,
           zeroline: false,
           tickangle: -45,
-          tickmode: "array",
-          tickvals: dayIdx,
-          ticktext: dates,
         },
         yaxis: {
           showgrid: true,
