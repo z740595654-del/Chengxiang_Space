@@ -1738,23 +1738,58 @@ function classifyCategory(tx) {
       const hint = document.getElementById("heatmapHint");
       if (!div) return;
 
-      if (!Array.isArray(bData) || !bData.length) {
+      // 聚合每日支出
+      const daily = {};
+      if (Array.isArray(bData)) {
+        bData.forEach((tx) => {
+          if (!tx.date) return;
+          if (tx.category_level1 === "收入") return;
+
+          const amt = Number(tx.amount || 0);
+          if (!Number.isFinite(amt) || amt <= 0) return;
+
+          daily[tx.date] = (daily[tx.date] || 0) + amt;
+        });
+      }
+
+      const amounts = Object.values(daily);
+      if (!amounts.length) {
         div.innerHTML = '<div class="label">当前范围内暂无 B 口径消费。</div>';
-        if (hint) hint.innerText = "";
+        if (hint) {
+          hint.innerText =
+            appState.scope === "all"
+              ? `范围：全部账期（${appState.period.start} ~ ${appState.period.end}）；颜色由绿到红再到紫，表示在当前范围内属于更高分位的消费日（按本期金额分布自动分档）。`
+              : `范围：${appState.period.start} ~ ${appState.period.end}；颜色由绿到红再到紫，表示在当前范围内属于更高分位的消费日（按本期金额分布自动分档）。`;
+        }
         return;
       }
 
-      // 聚合每日金额
-      const daily = {};
-      bData.forEach((tx) => {
-        if (!tx.date) return;
-        if (tx.category_level1 === "收入") return;
+      // 计算分位档位
+      const sorted = amounts.slice().sort((a, b) => a - b);
+      const q = (p) => sorted[Math.floor((sorted.length - 1) * p)];
+      const q1 = q(0.1);
+      const q2 = q(0.2);
+      const q3 = q(0.3);
+      const q4 = q(0.4);
+      const q5 = q(0.5);
+      const q6 = q(0.6);
+      const q7 = q(0.7);
+      const q8 = q(0.8);
+      const q9 = q(0.9);
 
-        const amt = Number(tx.amount || 0);
-        if (!Number.isFinite(amt) || amt <= 0) return;
-
-        daily[tx.date] = (daily[tx.date] || 0) + amt;
-      });
+      const bucketLevel = (amt) => {
+        if (amt <= 0) return 0;
+        if (amt <= q1) return 1;
+        if (amt <= q2) return 2;
+        if (amt <= q3) return 3;
+        if (amt <= q4) return 4;
+        if (amt <= q5) return 5;
+        if (amt <= q6) return 6;
+        if (amt <= q7) return 7;
+        if (amt <= q8) return 8;
+        if (amt < q9) return 9;
+        return 10;
+      };
 
       // 使用 renderAll 已计算好的 appState.period（本账期或全部账期）
       const periodStart = parseYMDLocal(appState.period.start);
@@ -1770,12 +1805,16 @@ function classifyCategory(tx) {
       const weeks = Math.max(1, Math.ceil(totalDays / 7));
 
       const dayLabels = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+      const weekLabels = Array.from({ length: weeks }, (_, i) => "W" + (i + 1));
 
-      const z = Array.from({ length: 7 }, () =>
-        Array.from({ length: weeks }, () => null)
+      const z = Array.from({ length: weeks }, () =>
+        Array.from({ length: 7 }, () => null)
       );
-      const text = Array.from({ length: 7 }, () =>
-        Array.from({ length: weeks }, () => "")
+      const text = Array.from({ length: weeks }, () =>
+        Array.from({ length: 7 }, () => "")
+      );
+      const customData = Array.from({ length: weeks }, () =>
+        Array.from({ length: 7 }, () => null)
       );
 
       for (let w = 0; w < weeks; w++) {
@@ -1786,46 +1825,90 @@ function classifyCategory(tx) {
           if (d < periodStart || d > periodEnd) continue;
 
           const ds = formatDateLocal(d);
-          const amt = daily[ds] || 0;
+          const amt = Number(daily[ds] || 0);
 
-          z[i][w] = amt;
-          text[i][w] = `${ds}<br>¥${amt.toFixed(2)}`;
+          if (amt <= 0) {
+            z[w][i] = null;
+            text[w][i] = `${ds}<br>¥0.00`;
+            customData[w][i] = ds;
+            continue;
+          }
+
+          const level = bucketLevel(amt);
+          const norm = level / 10;
+
+          z[w][i] = norm;
+          text[w][i] = `${ds}<br>¥${amt.toFixed(2)}`;
+          customData[w][i] = ds;
         }
       }
+
+      const colorscale = [
+        [0.0, "#00c853"],
+        [0.1, "#4ddf50"],
+        [0.2, "#aeea00"],
+        [0.3, "#ffd600"],
+        [0.4, "#ffab00"],
+        [0.5, "#ff9100"],
+        [0.6, "#ff6d00"],
+        [0.7, "#ff3d00"],
+        [0.85, "#d500f9"],
+        [1.0, "#aa00ff"],
+      ];
 
       const textColor = isLight ? "#64748b" : "#cbd5f5";
 
       const trace = {
         type: "heatmap",
         z,
-        x: Array.from({ length: weeks }, (_, i) => `W${i + 1}`),
-        y: dayLabels,
+        x: dayLabels,
+        y: weekLabels,
         text,
+        customdata: customData,
         hoverinfo: "text",
         showscale: false,
         xgap: 2,
         ygap: 2,
-        colorscale: isLight ? "Blues" : "YlOrRd",
+        colorscale,
       };
 
       const layout = {
         paper_bgcolor: "rgba(0,0,0,0)",
         plot_bgcolor: "rgba(0,0,0,0)",
         font: { color: textColor },
-        margin: { t: 8, l: 40, r: 10, b: 10 },
-        xaxis: { showgrid: false, showticklabels: false, zeroline: false },
-        yaxis: { showgrid: false, zeroline: false },
+        margin: { t: 8, l: 40, r: 10, b: 24 },
+        xaxis: {
+          showgrid: false,
+          zeroline: false,
+          showticklabels: true,
+        },
+        yaxis: {
+          showgrid: false,
+          zeroline: false,
+          showticklabels: true,
+        },
       };
 
       Plotly.newPlot("heatmapDiv", [trace], layout, {
         displayModeBar: false,
       });
 
+      const heatDiv = document.getElementById("heatmapDiv");
+      if (heatDiv && typeof showDayDetail === "function") {
+        heatDiv.on("plotly_click", function (evt) {
+          if (!evt || !evt.points || !evt.points.length) return;
+          const pt = evt.points[0];
+          const ds = pt.customdata;
+          if (!ds) return;
+          showDayDetail(ds);
+        });
+      }
+
       if (hint) {
         hint.innerText =
           appState.scope === "all"
-            ? `范围：全部账期（${appState.period.start} ~ ${appState.period.end}）`
-            : `范围：${appState.period.start} ~ ${appState.period.end}`;
+            ? `范围：全部账期（${appState.period.start} ~ ${appState.period.end}）；颜色由绿到红再到紫，表示在当前范围内属于更高分位的消费日（按本期金额分布自动分档）。`
+            : `范围：${appState.period.start} ~ ${appState.period.end}；颜色由绿到红再到紫，表示在当前范围内属于更高分位的消费日（按本期金额分布自动分档）。`;
       }
     }
 
