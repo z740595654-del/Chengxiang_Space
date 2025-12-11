@@ -1778,6 +1778,31 @@ function classifyCategory(tx) {
         });
       }
 
+      let visibleDays = totalDays;
+
+      // 先按数据找最后一个有支出的索引
+      let lastIdx = -1;
+      for (let i = 0; i < totalDays; i++) {
+        if (daily[i] > 0) lastIdx = i;
+      }
+
+      if (lastIdx >= 0) {
+        // 至少有一天有消费 → 画到最后一笔消费那天
+        visibleDays = lastIdx + 1;
+      } else {
+        // 完全没有消费 → 回退到“按今天 vs 账期”逻辑
+        const todayLocal = parseYMDLocal(formatDateLocal(new Date()));
+        let effectiveEnd = periodEnd;
+        if (todayLocal < periodStart) {
+          effectiveEnd = periodStart;
+        } else if (todayLocal < periodEnd) {
+          effectiveEnd = todayLocal;
+        }
+        visibleDays =
+          Math.floor((effectiveEnd - periodStart) / MS_PER_DAY) + 1;
+        if (visibleDays < 1) visibleDays = 1;
+      }
+
       const dates = [];
       const actual = [];
       const ideal = [];
@@ -1792,7 +1817,7 @@ function classifyCategory(tx) {
       })();
 
       let cum = 0;
-      for (let i = 0; i < totalDays; i++) {
+      for (let i = 0; i < visibleDays; i++) {
         const d = new Date(periodStart);
         d.setDate(periodStart.getDate() + i);
         const ds = formatDateLocal(d);
