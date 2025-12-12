@@ -876,9 +876,12 @@
     }
 
     function buildDateForMonth(year, month, day) {
-      const d = new Date(year, month, day);
-      if (d.getMonth() !== month) return new Date(year, month + 1, 0);
-      return d;
+      const base = new Date(year, month, 1);
+      const y = base.getFullYear();
+      const m = base.getMonth();
+      const lastDay = new Date(y, m + 1, 0).getDate();
+      const d = Math.min(Math.max(1, day), lastDay);
+      return new Date(y, m, d);
     }
 
     function dueFromStatement(card, statementDate) {
