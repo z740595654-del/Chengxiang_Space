@@ -1094,27 +1094,31 @@
           cardData.anchorAmount,
           formatDateLocal(today)
         );
-        const anchorLate =
-          cardData.anchor &&
-          parseYMDLocal(cardData.anchor.date) > cycle.periodStart;
         const anchorHint = cardData.anchor
           ? `最新欠款锚点：${cardData.anchor.date} · ¥${cardData.anchorAmount.toFixed(
               2
             )}`
           : "未找到欠款锚点，默认从 0 开始累计。";
 
+        let interestStart = cycle.periodStart;
+        if (cardData.anchor) {
+          const ad = parseYMDLocal(cardData.anchor.date);
+          if (ad > interestStart) interestStart = ad;
+        }
+
         const predicted = calcCardInterest(
           cardData,
-          cycle.periodStart,
+          interestStart,
           cycle.dueDate,
           card.daily_rate
         );
 
-        const warnText = anchorLate
-          ? `锚点晚于本期起算日（${formatDateLocal(
-              cycle.periodStart
-            )}），若到期未全额还清，预计利息可能低估。`
-          : "";
+        const warnText =
+          cardData.anchor && parseYMDLocal(cardData.anchor.date) > cycle.periodStart
+            ? `锚点晚于本期起算日（${formatDateLocal(
+                cycle.periodStart
+              )}），若到期未全额还清，预计利息可能低估。`
+            : "";
 
         const potentialBlock = `
           <div class="label">潜在利息（若到期未全额还清）：¥${predicted.toFixed(2)}</div>
