@@ -752,6 +752,13 @@
     function isBalanceAnchor(tx) {
       return tx && tx.account === BALANCE_ANCHOR_ACCOUNT;
     }
+    function isMetaTx(tx) {
+      if (!tx) return false;
+      if (isBalanceAnchor(tx)) return true;
+      const l1 = String(tx.category_level1 || "");
+      const l2 = String(tx.category_level2 || "");
+      return l1.endsWith("锚点") || l2.endsWith("锚点");
+    }
     function normalizeDateInput(str) {
       if (!str) return str;
       let s = String(str).trim();
@@ -896,7 +903,7 @@
         const baseBalance = Number(anchor.amount) || 0;
         let delta = 0;
         for (const tx of appState.transactions) {
-          if (isBalanceAnchor(tx)) continue;
+          if (isMetaTx(tx)) continue;
           if (!isTxAfterAnchor(tx, anchor)) continue;
           if (tx.category_level1 === "收入") {
             delta += tx.amount;
@@ -1167,11 +1174,12 @@
     }
 
     function getStatTransactions() {
-      return appState.transactions.filter((tx) => !isBalanceAnchor(tx));
+      return appState.transactions.filter((tx) => !isMetaTx(tx));
     }
 
     function filterBBase(list) {
       return list.filter((tx) => {
+        if (isMetaTx(tx)) return false;
         if (isBalanceAnchor(tx)) return false;
         if (["收入", "还款", "往来"].includes(tx.category_level1))
           return false;
