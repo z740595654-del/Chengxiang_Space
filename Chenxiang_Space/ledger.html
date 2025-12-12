@@ -180,6 +180,31 @@
     .progress-container {
       margin: 8px 0;
     }
+    .burn-toggle {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .burn-toggle .burn-btn {
+      width: auto;
+      padding: 6px 10px;
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--input-border);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease, border 0.2s ease;
+    }
+    .burn-toggle .burn-btn.active {
+      background: var(--blue);
+      color: #fff;
+      border-color: var(--blue);
+    }
+    .burn-toggle .burn-btn:active {
+      transform: translateY(1px);
+      opacity: 0.9;
+    }
     .progress-bar {
       height: 12px;
       background: var(--bar-bg);
@@ -445,9 +470,34 @@
 
     <!-- 预算燃尽曲线 -->
     <div class="card">
-      <div class="row">
-        <h3>📉 预算燃尽曲线</h3>
-        <span class="label">蓝色=实际累计支出，虚线=理想累计支出</span>
+      <div class="row" style="align-items: flex-start">
+        <div>
+          <h3>📉 预算燃尽曲线</h3>
+          <span class="label">蓝色=实际累计支出，虚线=理想累计支出</span>
+        </div>
+        <div class="burn-toggle">
+          <button
+            class="burn-btn"
+            id="btnBurnAuto"
+            onclick="setBurnView('auto')"
+          >
+            自动
+          </button>
+          <button
+            class="burn-btn"
+            id="btnBurnToDate"
+            onclick="setBurnView('toDate')"
+          >
+            至今日
+          </button>
+          <button
+            class="burn-btn"
+            id="btnBurnFull"
+            onclick="setBurnView('full')"
+          >
+            全账期
+          </button>
+        </div>
       </div>
       <div id="burnChartDiv" style="width:100%; height: 260px"></div>
     </div>
@@ -623,10 +673,11 @@
       ledgerKey: "",
       transactions: [],
       period: { start: "", end: "", days: 0 },
-      today: new Date().toISOString().split("T")[0],
+      today: formatDateLocal(new Date()),
       excludedTxIds: [], // 被剔除的大额消费 tx_id 列表
       periodChoices: [], // 数据中存在的所有账期
       lastBScope: [], // 最近一次用于图表的 B 口径数据
+      burnView: "auto", // auto | toDate | full
     };
 
     window.onload = async () => {
@@ -655,7 +706,32 @@
       if (appState.lastBScope.length) {
         drawCharts(appState.lastBScope, theme === "light");
         renderKeyMetrics(appState.lastBScope);
+        drawLedgerHeatmap(appState.lastBScope, theme === "light");
+        drawBurnChart(appState.lastBScope, theme === "light");
       }
+    }
+
+    function updateBurnToggle(resolvedView, selectedView) {
+      const btnToDate = document.getElementById("btnBurnToDate");
+      const btnFull = document.getElementById("btnBurnFull");
+      const btnAuto = document.getElementById("btnBurnAuto");
+      const resolved = selectedView || resolvedView;
+      if (btnToDate && btnFull) {
+        btnToDate.classList.toggle("active", resolvedView === "toDate");
+        btnFull.classList.toggle("active", resolvedView === "full");
+      }
+      if (btnAuto) btnAuto.classList.toggle("active", resolved === "auto");
+    }
+
+    function setBurnView(view) {
+      const allowed = ["auto", "toDate", "full"];
+      if (!allowed.includes(view)) return;
+      appState.burnView = view;
+      localStorage.setItem("ledger_burn_view", view);
+      updateBurnToggle(view === "full" ? "full" : "toDate", view);
+      if (!appState.period.start || !appState.period.end) return;
+      const theme = document.documentElement.getAttribute("data-theme") || "dark";
+      drawBurnChart(appState.lastBScope || [], theme === "light");
     }
 
     /* ========== 工具函数 ========== */
@@ -750,6 +826,11 @@
 
       let scope = localStorage.getItem("ledger_scope") || "current";
       appState.scope = scope;
+
+      const burnPref = localStorage.getItem("ledger_burn_view") || "auto";
+      if (["auto", "toDate", "full"].includes(burnPref)) {
+        appState.burnView = burnPref;
+      }
 
       // 剔除的大额 tx_id 列表
       try {
@@ -1538,7 +1619,7 @@ function classifyCategory(tx) {
       }
 
       const excludedSet = new Set(appState.excludedTxIds || []);
-      const today = new Date(appState.today);
+      const today = parseYMDLocal(appState.today);
       const BIG_THRESHOLD = 500; // 默认大额阈值
 
       const excluded = data
@@ -1810,25 +1891,73 @@ function classifyCategory(tx) {
         ? "rgba(148,163,184,0.25)"
         : "rgba(148,163,184,0.45)";
 
+      const today = parseYMDLocal(appState.today);
+      let todayIdxRaw = Math.floor((today - periodStart) / MS_PER_DAY);
+      if (!Number.isFinite(todayIdxRaw)) todayIdxRaw = 0;
+      const daysFromStart = Math.max(0, todayIdxRaw);
+      let todayIdx = Math.min(Math.max(todayIdxRaw, 0), totalDays - 1);
+
+      const budgetRatio =
+        totalBudgetB > 0 ? (actual[todayIdx] || 0) / totalBudgetB : 0;
+
+      const viewPref = appState.burnView || "auto";
+      let viewMode = viewPref;
+      if (viewMode === "auto") {
+        viewMode =
+          daysFromStart <= 7 || budgetRatio < 0.15 ? "toDate" : "full";
+      }
+
+      const sliceEnd = viewMode === "toDate" ? todayIdx + 1 : totalDays;
+      const viewDates = dates.slice(0, sliceEnd);
+      const viewActual = actual.slice(0, sliceEnd);
+      const viewIdeal = ideal.slice(0, sliceEnd);
+
       const traceActual = {
-        x: dates,
-        y: actual,
+        x: viewDates,
+        y: viewActual,
         type: "scatter",
-        mode: "lines",
+        mode: "lines+markers",
         name: "实际累计支出",
         line: { width: 2 },
+        marker: { size: 6 },
         hovertemplate: "%{x}<br>累计支出：¥%{y:.2f}<extra></extra>",
       };
 
       const traceIdeal = {
-        x: dates,
-        y: ideal,
+        x: viewDates,
+        y: viewIdeal,
         type: "scatter",
         mode: "lines",
         name: "理想累计支出",
         line: { width: 2, dash: "dot" },
         hovertemplate: "%{x}<br>理想累计：¥%{y:.2f}<extra></extra>",
       };
+
+      const shapes = [];
+      if (
+        viewMode === "full" &&
+        today instanceof Date &&
+        today >= periodStart &&
+        today <= periodEnd
+      ) {
+        const todayStr = formatDateLocal(today);
+        shapes.push({
+          type: "line",
+          xref: "x",
+          yref: "paper",
+          x0: todayStr,
+          x1: todayStr,
+          y0: 0,
+          y1: 1,
+          line: {
+            color: isLight ? "#94a3b8" : "#cbd5f5",
+            width: 1.5,
+            dash: "dash",
+          },
+        });
+      }
+
+      updateBurnToggle(viewMode === "full" ? "full" : "toDate", viewPref);
 
       const layout = {
         paper_bgcolor: "rgba(0,0,0,0)",
@@ -1850,9 +1979,10 @@ function classifyCategory(tx) {
           x: 0,
           y: 1.1,
         },
+        shapes,
       };
 
-      Plotly.newPlot("burnChartDiv", [traceActual, traceIdeal], layout, {
+      Plotly.react(div, [traceActual, traceIdeal], layout, {
         displayModeBar: false,
       });
     }
