@@ -982,6 +982,35 @@
       return total;
     }
 
+    function calcCardInterestDaily(cardData, startDate, endDate, rate) {
+      if (!cardData || !startDate || !endDate) return [];
+      if (startDate > endDate) return [];
+      const events = cardData.events || [];
+      let bal = cardData.anchorAmount || 0;
+      const startStr = formatDateLocal(startDate);
+      let idx = 0;
+      while (idx < events.length && events[idx].date < startStr) {
+        bal += events[idx].delta;
+        idx++;
+      }
+
+      const res = [];
+      let total = 0;
+      const cursor = new Date(startDate);
+      while (cursor <= endDate) {
+        const ds = formatDateLocal(cursor);
+        while (idx < events.length && events[idx].date === ds) {
+          bal += events[idx].delta;
+          idx++;
+        }
+        const dayInterest = Math.max(bal, 0) * rate;
+        total += dayInterest;
+        res.push({ date: ds, balance: bal, interest: dayInterest, total });
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      return res;
+    }
+
     /* ========== 配置初始化 ========== */
     function initSettings() {
       try {
@@ -1109,12 +1138,34 @@
           if (ad > interestStart) interestStart = ad;
         }
 
-        const predicted = calcCardInterest(
+        const dailyToDue = calcCardInterestDaily(
           cardData,
           interestStart,
           cycle.dueDate,
           card.daily_rate
         );
+        const predicted = dailyToDue.length
+          ? dailyToDue[dailyToDue.length - 1].total
+          : 0;
+
+        const histEnd = today <= cycle.dueDate ? today : cycle.dueDate;
+        const dailyHist =
+          interestStart <= histEnd
+            ? calcCardInterestDaily(
+                cardData,
+                interestStart,
+                histEnd,
+                card.daily_rate
+              )
+            : [];
+        const accrued = dailyHist.length
+          ? dailyHist[dailyHist.length - 1].total
+          : 0;
+        const todayInterest =
+          dailyHist.length &&
+          dailyHist[dailyHist.length - 1].date === formatDateLocal(today)
+            ? dailyHist[dailyHist.length - 1].interest
+            : 0;
 
         const warnText =
           cardData.anchor && parseYMDLocal(cardData.anchor.date) > cycle.periodStart
@@ -1123,10 +1174,34 @@
               )}），若到期未全额还清，预计利息可能低估。`
             : "";
 
+        const rowsHtml = dailyHist
+          .map(
+            (d) => `
+              <tr>
+                <td>${d.date}</td>
+                <td>¥${d.balance.toFixed(2)}</td>
+                <td>¥${d.interest.toFixed(2)}</td>
+                <td>¥${d.total.toFixed(2)}</td>
+              </tr>`
+          )
+          .join("");
+
         const potentialBlock = `
+          <div class="label">今日潜在利息：¥${todayInterest.toFixed(2)}</div>
+          <div class="label">历史累计利息（至今日）：¥${accrued.toFixed(2)}</div>
           <div class="label">潜在利息（若到期未全额还清）：¥${predicted.toFixed(2)}</div>
           <div class="label">（仅基于已入账流水；未来新增消费/还款会改变预测）</div>
           ${warnText ? `<div class="label warning">${warnText}</div>` : ""}
+          <details class="label">
+            <summary>查看按天明细（历史）</summary>
+            ${
+              rowsHtml
+                ? `<table class="label" style="width:100%;border-collapse:collapse;">
+                <thead><tr><th align="left">日期</th><th align="right">当日余额</th><th align="right">当日利息</th><th align="right">累计利息</th></tr></thead>
+                <tbody>${rowsHtml}</tbody></table>`
+                : `<div class="label">暂无可展示的历史明细。</div>`
+            }
+          </details>
         `;
         return `<div class="credit-row">
             <div>
