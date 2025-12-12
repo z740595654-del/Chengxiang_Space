@@ -70,6 +70,25 @@
       grid-template-columns: repeat(2, 1fr);
       gap: 8px;
     }
+    .credit-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    .credit-row {
+      border: 1px solid var(--input-border);
+      border-radius: 10px;
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      background: rgba(59, 130, 246, 0.04);
+    }
+    @media (min-width: 768px) {
+      .credit-row {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
     @media (min-width: 768px) {
       body {
         padding: 16px 0 60px;
@@ -318,16 +337,10 @@
         <div class="label">当前资产概览</div>
         <div class="label" id="periodDate">账期计算中...</div>
       </div>
-      <div class="grid-2">
-        <div>
-          <div class="metric-label">💰 目前余额</div>
-          <div class="metric-value" id="valBalance">¥0.00</div>
-          <div class="label" id="valBalanceHint"></div>
-        </div>
-        <div style="text-align: right">
-          <div class="metric-label">🧨 广发欠款（估算）</div>
-          <div class="metric-value" id="valGfDebt">--</div>
-        </div>
+      <div>
+        <div class="metric-label">💰 目前余额</div>
+        <div class="metric-value" id="valBalance">¥0.00</div>
+        <div class="label" id="valBalanceHint"></div>
       </div>
     </div>
 
@@ -368,6 +381,20 @@
       </div>
     </div>
 
+    <!-- 信用卡模块（现实口径 A） -->
+    <div class="card">
+      <div class="row" style="align-items: flex-start">
+        <div>
+          <h3>💳 信用卡（现实口径 A，不制造焦虑）</h3>
+          <div class="label">到期日前应计利息固定按 0 展示</div>
+        </div>
+        <div class="label" style="text-align: right">
+          利率与账单/到期日固定写入页面，不再在配置面板调整。
+        </div>
+      </div>
+      <div id="creditCardPanel" class="credit-grid"></div>
+    </div>
+
     <!-- 配置卡 -->
     <div
       id="configPanel"
@@ -386,10 +413,6 @@
         </div>
       </div>
       <div class="grid-2">
-        <div>
-          <label class="label">广发信用卡欠款估算</label>
-          <input type="number" id="cfgGfDebt" placeholder="例如 10000" />
-        </div>
         <div>
           <label class="label">余额锚点说明</label>
           <div class="label" style="line-height: 1.45">
@@ -662,12 +685,27 @@
   <script>
     const LEDGER_API_BASE = "https://czbpght.cn/ledger";
     const BALANCE_ANCHOR_ACCOUNT = "BALANCE_ANCHOR";
+    const CREDIT_CARDS = [
+      {
+        key: "cmb",
+        name: "招商信用卡",
+        statement_day: 19,
+        due_day: 7,
+        daily_rate: 0.0005,
+      },
+      {
+        key: "gf",
+        name: "广发信用卡",
+        statement_day: 2,
+        due_day: 22,
+        daily_rate: 0.0005,
+      },
+    ];
 
     let appState = {
       settings: {
         period_start: 10,
         total_budget: 3500,
-        gf_debt: 0,
       },
       scope: "current", // current | all | period:YYYY-MM-DD
       ledgerKey: "",
@@ -814,6 +852,165 @@
       return false;
     }
 
+    function compareTxOrder(a, b) {
+      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+      const aSeq = getTxSeq(a.tx_id);
+      const bSeq = getTxSeq(b.tx_id);
+      if (aSeq !== null && bSeq !== null) return aSeq - bSeq;
+      if (aSeq === null && bSeq === null)
+        return (a.tx_id || "") < (b.tx_id || "") ? -1 : 1;
+      return aSeq === null ? -1 : 1;
+    }
+
+    function findLatestCardAnchor(txs, accountName) {
+      const anchors = txs.filter((tx) => {
+        if (tx.account !== accountName) return false;
+        if (tx.book !== "主账") return false;
+        if (Number(tx.is_xiaoe) === 1) return false;
+        const l1 = String(tx.category_level1 || "");
+        const l2 = String(tx.category_level2 || "");
+        return l1 === "欠款锚点" || l2 === "欠款锚点";
+      });
+      if (!anchors.length) return null;
+      return anchors.sort(compareTxOrder)[anchors.length - 1];
+    }
+
+    function buildDateForMonth(year, month, day) {
+      const base = new Date(year, month, 1);
+      const y = base.getFullYear();
+      const m = base.getMonth();
+      const lastDay = new Date(y, m + 1, 0).getDate();
+      const d = Math.min(Math.max(1, day), lastDay);
+      return new Date(y, m, d);
+    }
+
+    function dueFromStatement(card, statementDate) {
+      const y = statementDate.getFullYear();
+      const m = statementDate.getMonth();
+      const dueMonth = card.due_day <= card.statement_day ? m + 1 : m;
+      return buildDateForMonth(y, dueMonth, card.due_day);
+    }
+
+    function buildCardCycle(card, refDate) {
+      if (!card) return null;
+      const y = refDate.getFullYear();
+      const m = refDate.getMonth();
+
+      const candidates = [-1, 0, 1].map((off) => {
+        const statementDate = buildDateForMonth(y, m + off, card.statement_day);
+        const dueDate = dueFromStatement(card, statementDate);
+        return { statementDate, dueDate };
+      });
+
+      const next = candidates
+        .filter((c) => c.dueDate >= refDate)
+        .sort((a, b) => a.dueDate - b.dueDate)[0];
+
+      if (!next) return null;
+
+      const prevStatementDate = buildDateForMonth(
+        next.statementDate.getFullYear(),
+        next.statementDate.getMonth() - 1,
+        card.statement_day
+      );
+
+      const periodStart = new Date(prevStatementDate);
+      periodStart.setDate(periodStart.getDate() + 1);
+
+      return { statementDate: next.statementDate, periodStart, dueDate: next.dueDate };
+    }
+
+    function buildCardData(card) {
+      const txs = appState.transactions.filter((tx) => {
+        if (tx.account !== card.name) return false;
+        if (tx.book !== "主账") return false;
+        return Number(tx.is_xiaoe) !== 1;
+      });
+      const anchor = findLatestCardAnchor(txs, card.name);
+      const anchorAmount = anchor ? Number(anchor.amount) || 0 : 0;
+      const events = txs
+        .filter((tx) => {
+          if (anchor && !isTxAfterAnchor(tx, anchor)) return false;
+          const l1 = String(tx.category_level1 || "");
+          const l2 = String(tx.category_level2 || "");
+          return !(l1 === "欠款锚点" || l2 === "欠款锚点");
+        })
+        .sort(compareTxOrder)
+        .map((tx) => {
+          const amt = Math.abs(Number(tx.amount) || 0);
+          let delta = amt;
+          if (tx.category_level1 === "还款") delta = -amt;
+          else if (tx.category_level1 === "收入" && tx.account === card.name)
+            delta = -amt;
+          return { date: tx.date, delta };
+        });
+      return { anchor, anchorAmount, events };
+    }
+
+    function computeBalanceUntil(events, base, dateStr) {
+      let bal = base;
+      for (const ev of events) {
+        if (ev.date > dateStr) break;
+        bal += ev.delta;
+      }
+      return bal;
+    }
+
+    function calcCardInterest(cardData, startDate, endDate, rate) {
+      if (!cardData) return 0;
+      const events = cardData.events || [];
+      let bal = cardData.anchorAmount || 0;
+      const startStr = formatDateLocal(startDate);
+      const endStr = formatDateLocal(endDate);
+      let idx = 0;
+      while (idx < events.length && events[idx].date < startStr) {
+        bal += events[idx].delta;
+        idx++;
+      }
+
+      let total = 0;
+      const cursor = new Date(startDate);
+      while (cursor <= endDate) {
+        const ds = formatDateLocal(cursor);
+        while (idx < events.length && events[idx].date === ds) {
+          bal += events[idx].delta;
+          idx++;
+        }
+        total += Math.max(bal, 0) * rate;
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      return total;
+    }
+
+    function calcCardInterestDaily(cardData, startDate, endDate, rate) {
+      if (!cardData || !startDate || !endDate) return [];
+      if (startDate > endDate) return [];
+      const events = cardData.events || [];
+      let bal = cardData.anchorAmount || 0;
+      const startStr = formatDateLocal(startDate);
+      let idx = 0;
+      while (idx < events.length && events[idx].date < startStr) {
+        bal += events[idx].delta;
+        idx++;
+      }
+
+      const res = [];
+      let total = 0;
+      const cursor = new Date(startDate);
+      while (cursor <= endDate) {
+        const ds = formatDateLocal(cursor);
+        while (idx < events.length && events[idx].date === ds) {
+          bal += events[idx].delta;
+          idx++;
+        }
+        const dayInterest = Math.max(bal, 0) * rate;
+        total += dayInterest;
+        res.push({ date: ds, balance: bal, interest: dayInterest, total });
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      return res;
+    }
+
     /* ========== 配置初始化 ========== */
     function initSettings() {
       try {
@@ -824,8 +1021,6 @@
             appState.settings.period_start = s.period_start;
           if (typeof s.total_budget === "number")
             appState.settings.total_budget = s.total_budget;
-          if (typeof s.gf_debt === "number")
-            appState.settings.gf_debt = s.gf_debt;
         }
       } catch (e) {}
       const key = localStorage.getItem("ledger_key") || "";
@@ -855,8 +1050,6 @@
         appState.settings.period_start;
       document.getElementById("cfgBudget").value =
         appState.settings.total_budget;
-      document.getElementById("cfgGfDebt").value =
-        appState.settings.gf_debt || "";
       document.getElementById("cfgKey").value = key;
       document.getElementById("cfgScope").value = scope;
 
@@ -869,14 +1062,12 @@
         10
       );
       const budget = parseFloat(document.getElementById("cfgBudget").value);
-      const gf = parseFloat(document.getElementById("cfgGfDebt").value);
       const key = (document.getElementById("cfgKey").value || "").trim();
       const scopeVal = document.getElementById("cfgScope").value || "current";
 
       appState.settings = {
         period_start: isNaN(start) ? 10 : start,
         total_budget: isNaN(budget) ? 3500 : budget,
-        gf_debt: isNaN(gf) ? 0 : gf,
       };
       appState.ledgerKey = key;
       appState.scope = scopeVal;
@@ -917,19 +1108,120 @@
         if (balanceHint) balanceHint.textContent = "未设置余额锚点";
       }
 
-      const gf = appState.settings.gf_debt || 0;
-      const rate = 0.015; // 千五左右
-      const interest = gf * rate;
-
       document.getElementById("valBalance").innerText =
         "¥" + displayBal.toFixed(2);
-      if (gf > 0) {
-        document.getElementById("valGfDebt").innerText =
-          "¥" + gf.toFixed(0) + "（月息约 ¥" + interest.toFixed(0) + "）";
-      } else {
-        document.getElementById("valGfDebt").innerText =
-          "无负债或未填写";
-      }
+    }
+
+    function renderCreditCards() {
+      const container = document.getElementById("creditCardPanel");
+      if (!container) return;
+      const today = parseYMDLocal(appState.today);
+      const blocks = CREDIT_CARDS.map((card) => {
+        const cardData = buildCardData(card);
+        const cycle = buildCardCycle(card, today);
+        if (!cycle)
+          return `<div class="credit-row"><div class="label">未能解析 ${card.name} 的账单周期。</div></div>`;
+        const balance = computeBalanceUntil(
+          cardData.events,
+          cardData.anchorAmount,
+          formatDateLocal(today)
+        );
+        const anchorHint = cardData.anchor
+          ? `最新欠款锚点：${cardData.anchor.date} · ¥${cardData.anchorAmount.toFixed(
+              2
+            )}`
+          : "未找到欠款锚点，默认从 0 开始累计。";
+
+        let interestStart = cycle.periodStart;
+        if (cardData.anchor) {
+          const ad = parseYMDLocal(cardData.anchor.date);
+          if (ad > interestStart) interestStart = ad;
+        }
+
+        const dailyToDue = calcCardInterestDaily(
+          cardData,
+          interestStart,
+          cycle.dueDate,
+          card.daily_rate
+        );
+        const predicted = dailyToDue.length
+          ? dailyToDue[dailyToDue.length - 1].total
+          : 0;
+
+        const histEnd = today <= cycle.dueDate ? today : cycle.dueDate;
+        const dailyHist =
+          interestStart <= histEnd
+            ? calcCardInterestDaily(
+                cardData,
+                interestStart,
+                histEnd,
+                card.daily_rate
+              )
+            : [];
+        const accrued = dailyHist.length
+          ? dailyHist[dailyHist.length - 1].total
+          : 0;
+        const todayInterest =
+          dailyHist.length &&
+          dailyHist[dailyHist.length - 1].date === formatDateLocal(today)
+            ? dailyHist[dailyHist.length - 1].interest
+            : 0;
+
+        const warnText =
+          cardData.anchor && parseYMDLocal(cardData.anchor.date) > cycle.periodStart
+            ? `锚点晚于本期起算日（${formatDateLocal(
+                cycle.periodStart
+              )}），若到期未全额还清，预计利息可能低估。`
+            : "";
+
+        const rowsHtml = dailyHist
+          .map(
+            (d) => `
+              <tr>
+                <td>${d.date}</td>
+                <td>¥${d.balance.toFixed(2)}</td>
+                <td>¥${d.interest.toFixed(2)}</td>
+                <td>¥${d.total.toFixed(2)}</td>
+              </tr>`
+          )
+          .join("");
+
+        const potentialBlock = `
+          <div class="label">今日潜在利息：¥${todayInterest.toFixed(2)}</div>
+          <div class="label">历史累计利息（至今日）：¥${accrued.toFixed(2)}</div>
+          <div class="label">潜在利息（若到期未全额还清）：¥${predicted.toFixed(2)}</div>
+          <div class="label">（仅基于已入账流水；未来新增消费/还款会改变预测）</div>
+          ${warnText ? `<div class="label warning">${warnText}</div>` : ""}
+          <details class="label">
+            <summary>查看按天明细（历史）</summary>
+            ${
+              rowsHtml
+                ? `<table class="label" style="width:100%;border-collapse:collapse;">
+                <thead><tr><th align="left">日期</th><th align="right">当日余额</th><th align="right">当日利息</th><th align="right">累计利息</th></tr></thead>
+                <tbody>${rowsHtml}</tbody></table>`
+                : `<div class="label">暂无可展示的历史明细。</div>`
+            }
+          </details>
+        `;
+        return `<div class="credit-row">
+            <div>
+              <div class="metric-label">${card.name}</div>
+              <div class="metric-value">欠款 ¥${balance.toFixed(2)}</div>
+              <div class="label">账单日 ${card.statement_day} · 到期日 ${
+          card.due_day
+        } · 日利率 ${card.daily_rate}</div>
+              <div class="label">${anchorHint}</div>
+            </div>
+            <div style="text-align:right; align-self:center;">
+              <div class="label">下一次到期日：${formatDateLocal(
+                cycle.dueDate
+              )}</div>
+              <div class="label">当前应计利息：¥0.00</div>
+              ${potentialBlock}
+            </div>
+          </div>`;
+      });
+      container.innerHTML = blocks.join("");
     }
 
     function toggleConfig() {
@@ -1245,6 +1537,7 @@
 
       // 更新资产卡（余额跟随流水）
       renderAssets();
+      renderCreditCards();
 
       const remainLabelEl =
         document.getElementById("lblRemainTitle");
