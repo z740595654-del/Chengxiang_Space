@@ -11,7 +11,8 @@
       --panel: #1e293b;
       --text: #f1f5f9;
       --dim: #94a3b8;
-      --border: 1px solid rgba(255, 255, 255, 0.1);
+      --border-color: rgba(255, 255, 255, 0.1);
+      --border: 1px solid var(--border-color);
       --input-bg: #0f172a;
       --input-border: #334155;
       --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
@@ -26,7 +27,8 @@
       --panel: #ffffff;
       --text: #0f172a;
       --dim: #64748b;
-      --border: 1px solid #e2e8f0;
+      --border-color: #e2e8f0;
+      --border: 1px solid var(--border-color);
       --input-bg: #ffffff;
       --input-border: #cbd5e1;
       --shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.08);
@@ -914,7 +916,7 @@
 
     function calcCardDebtAndDeltas(txs, cardAccount) {
       const relevant = (txs || []).filter(
-        (tx) => tx.book === "主账" && !tx.is_xiaoe
+        (tx) => tx.book === "主账" && Number(tx.is_xiaoe) !== 1
       );
       const anchor = findLatestDebtAnchor(relevant, cardAccount);
       const deltasByDate = {};
@@ -1003,6 +1005,7 @@
 
       let interestStartDate = new Date(lastStatementDate);
       interestStartDate.setDate(interestStartDate.getDate() + 1);
+      const originalStartDate = new Date(interestStartDate);
       const notes = [];
 
       if (!cardResult.anchor) {
@@ -1024,7 +1027,9 @@
       const anchorDate = parseYMDLocal(cardResult.anchor.date);
       if (anchorDate > interestStartDate) {
         interestStartDate = anchorDate;
-        notes.push("锚点晚于起算日，累计利息可能低估。");
+        notes.push(
+          `锚点晚于本期起算日（${formatDateLocal(originalStartDate)}），累计利息可能低估。`
+        );
       }
 
       const deltas = cardResult.deltasByDate || {};
@@ -1079,10 +1084,11 @@
         );
         const interestInfo = calcCardInterest(debtInfo, setting);
 
+        const rawDebt = Number(debtInfo.debt || 0);
         const debtDisplay =
           debtInfo.anchor === null
             ? "--"
-            : `¥${Number(debtInfo.debt || 0).toFixed(2)}`;
+            : `¥${Math.max(rawDebt, 0).toFixed(2)}`;
 
         const interestText =
           debtInfo.anchor === null
@@ -1100,15 +1106,19 @@
           .concat(debtInfo.notes || [])
           .concat(interestInfo.notes || []);
 
+        if (debtInfo.anchor !== null && rawDebt < 0) {
+          tips.push(`已结清/溢出 ¥${Math.abs(rawDebt).toFixed(2)}`);
+        }
+
         const tipsHtml = tips
           .map((t) => `<div class="label warning" style="margin-top:4px;">${t}</div>`)
           .join("");
 
-        return `<div style="padding:10px 0; border-top: var(--border);">
+        return `<div style="padding:10px 0; border-top: 1px solid var(--border-color);">
             <div class="row" style="align-items:flex-start;">
               <div>
                 <div class="metric-label" style="font-size:0.9rem; color:var(--text);">${card.name}</div>
-                <div class="value" style="margin-top:4px;">${debtDisplay}</div>
+                <div class="metric-value" style="margin-top:4px;">${debtDisplay}</div>
               </div>
               <div style="text-align:right; max-width:60%;">
                 <div class="label">（${interestText}）</div>
@@ -1532,7 +1542,7 @@
         if (isBalanceAnchor(tx)) return false;
         if (["收入", "还款", "往来"].includes(tx.category_level1))
           return false;
-        if (tx.is_xiaoe) return false;
+        if (Number(tx.is_xiaoe) === 1) return false;
         return true;
       });
     }
