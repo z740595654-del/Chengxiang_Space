@@ -478,6 +478,13 @@
         <div class="burn-toggle">
           <button
             class="burn-btn"
+            id="btnBurnAuto"
+            onclick="setBurnView('auto')"
+          >
+            自动
+          </button>
+          <button
+            class="burn-btn"
             id="btnBurnToDate"
             onclick="setBurnView('toDate')"
           >
@@ -666,7 +673,7 @@
       ledgerKey: "",
       transactions: [],
       period: { start: "", end: "", days: 0 },
-      today: new Date().toISOString().split("T")[0],
+      today: formatDateLocal(new Date()),
       excludedTxIds: [], // 被剔除的大额消费 tx_id 列表
       periodChoices: [], // 数据中存在的所有账期
       lastBScope: [], // 最近一次用于图表的 B 口径数据
@@ -704,13 +711,16 @@
       }
     }
 
-    function updateBurnToggle(activeView) {
+    function updateBurnToggle(resolvedView, selectedView) {
       const btnToDate = document.getElementById("btnBurnToDate");
       const btnFull = document.getElementById("btnBurnFull");
+      const btnAuto = document.getElementById("btnBurnAuto");
+      const resolved = selectedView || resolvedView;
       if (btnToDate && btnFull) {
-        btnToDate.classList.toggle("active", activeView === "toDate");
-        btnFull.classList.toggle("active", activeView === "full");
+        btnToDate.classList.toggle("active", resolvedView === "toDate");
+        btnFull.classList.toggle("active", resolvedView === "full");
       }
+      if (btnAuto) btnAuto.classList.toggle("active", resolved === "auto");
     }
 
     function setBurnView(view) {
@@ -718,7 +728,7 @@
       if (!allowed.includes(view)) return;
       appState.burnView = view;
       localStorage.setItem("ledger_burn_view", view);
-      updateBurnToggle(view === "full" ? "full" : "toDate");
+      updateBurnToggle(view === "full" ? "full" : "toDate", view);
       if (!appState.period.start || !appState.period.end) return;
       const theme = document.documentElement.getAttribute("data-theme") || "dark";
       drawBurnChart(appState.lastBScope || [], theme === "light");
@@ -1609,7 +1619,7 @@ function classifyCategory(tx) {
       }
 
       const excludedSet = new Set(appState.excludedTxIds || []);
-      const today = new Date(appState.today);
+      const today = parseYMDLocal(appState.today);
       const BIG_THRESHOLD = 500; // 默认大额阈值
 
       const excluded = data
@@ -1890,7 +1900,8 @@ function classifyCategory(tx) {
       const budgetRatio =
         totalBudgetB > 0 ? (actual[todayIdx] || 0) / totalBudgetB : 0;
 
-      let viewMode = appState.burnView || "auto";
+      const viewPref = appState.burnView || "auto";
+      let viewMode = viewPref;
       if (viewMode === "auto") {
         viewMode =
           daysFromStart <= 7 || budgetRatio < 0.15 ? "toDate" : "full";
@@ -1946,7 +1957,7 @@ function classifyCategory(tx) {
         });
       }
 
-      updateBurnToggle(viewMode === "full" ? "full" : "toDate");
+      updateBurnToggle(viewMode === "full" ? "full" : "toDate", viewPref);
 
       const layout = {
         paper_bgcolor: "rgba(0,0,0,0)",
