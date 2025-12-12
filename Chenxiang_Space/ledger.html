@@ -1035,7 +1035,9 @@
       const deltas = cardResult.deltasByDate || {};
       const endDate = nextDueDate > today ? nextDueDate : today;
       let currentDebt = Number(cardResult.anchor.amount) || 0;
-      let cursor = new Date(anchorDate);
+      let cursor = new Date(
+        Math.min(anchorDate.getTime(), interestStartDate.getTime())
+      );
       let cumulativeZZ = 0;
       let projectedYY = 0;
 
