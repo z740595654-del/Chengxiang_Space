@@ -337,16 +337,10 @@
         <div class="label">当前资产概览</div>
         <div class="label" id="periodDate">账期计算中...</div>
       </div>
-      <div class="grid-2">
-        <div>
-          <div class="metric-label">💰 目前余额</div>
-          <div class="metric-value" id="valBalance">¥0.00</div>
-          <div class="label" id="valBalanceHint"></div>
-        </div>
-        <div style="text-align: right">
-          <div class="metric-label">🧨 广发欠款（估算）</div>
-          <div class="metric-value" id="valGfDebt">--</div>
-        </div>
+      <div>
+        <div class="metric-label">💰 目前余额</div>
+        <div class="metric-value" id="valBalance">¥0.00</div>
+        <div class="label" id="valBalanceHint"></div>
       </div>
     </div>
 
@@ -391,10 +385,8 @@
     <div class="card">
       <div class="row" style="align-items: flex-start">
         <div>
-          <h3>💳 信用卡（现实口径 A）</h3>
-          <div class="label">
-            若到期未全额还清：预计本期利息 ¥YY；到期日前利息按 0 展示
-          </div>
+          <h3>💳 信用卡（现实口径 A，不制造焦虑）</h3>
+          <div class="label">到期日前应计利息固定按 0 展示</div>
         </div>
         <div class="label" style="text-align: right">
           利率与账单/到期日固定写入页面，不再在配置面板调整。
@@ -421,10 +413,6 @@
         </div>
       </div>
       <div class="grid-2">
-        <div>
-          <label class="label">广发信用卡欠款估算</label>
-          <input type="number" id="cfgGfDebt" placeholder="例如 10000" />
-        </div>
         <div>
           <label class="label">余额锚点说明</label>
           <div class="label" style="line-height: 1.45">
@@ -718,7 +706,6 @@
       settings: {
         period_start: 10,
         total_budget: 3500,
-        gf_debt: 0,
       },
       scope: "current", // current | all | period:YYYY-MM-DD
       ledgerKey: "",
@@ -876,9 +863,14 @@
     }
 
     function findLatestCardAnchor(txs, accountName) {
-      const anchors = txs.filter(
-        (tx) => tx.account === accountName && isMetaTx(tx)
-      );
+      const anchors = txs.filter((tx) => {
+        if (tx.account !== accountName) return false;
+        if (tx.book !== "主账") return false;
+        if (Number(tx.is_xiaoe) === 1) return false;
+        const l1 = String(tx.category_level1 || "");
+        const l2 = String(tx.category_level2 || "");
+        return l1 === "欠款锚点" || l2 === "欠款锚点";
+      });
       if (!anchors.length) return null;
       return anchors.sort(compareTxOrder)[anchors.length - 1];
     }
@@ -917,19 +909,29 @@
     }
 
     function buildCardData(card) {
-      const txs = appState.transactions.filter(
-        (tx) => tx.account === card.name
-      );
+      const txs = appState.transactions.filter((tx) => {
+        if (tx.account !== card.name) return false;
+        if (tx.book !== "主账") return false;
+        return Number(tx.is_xiaoe) !== 1;
+      });
       const anchor = findLatestCardAnchor(txs, card.name);
       const anchorAmount = anchor ? Number(anchor.amount) || 0 : 0;
       const events = txs
-        .filter((tx) => !isMetaTx(tx))
-        .filter((tx) => !anchor || isTxAfterAnchor(tx, anchor))
+        .filter((tx) => {
+          if (anchor && !isTxAfterAnchor(tx, anchor)) return false;
+          const l1 = String(tx.category_level1 || "");
+          const l2 = String(tx.category_level2 || "");
+          return !(l1 === "欠款锚点" || l2 === "欠款锚点");
+        })
         .sort(compareTxOrder)
-        .map((tx) => ({
-          date: tx.date,
-          delta: tx.category_level1 === "还款" ? -Number(tx.amount) : Number(tx.amount),
-        }));
+        .map((tx) => {
+          const amt = Math.abs(Number(tx.amount) || 0);
+          let delta = amt;
+          if (tx.category_level1 === "还款") delta = -amt;
+          else if (tx.category_level1 === "收入" && tx.account === card.name)
+            delta = -amt;
+          return { date: tx.date, delta };
+        });
       return { anchor, anchorAmount, events };
     }
 
@@ -978,8 +980,6 @@
             appState.settings.period_start = s.period_start;
           if (typeof s.total_budget === "number")
             appState.settings.total_budget = s.total_budget;
-          if (typeof s.gf_debt === "number")
-            appState.settings.gf_debt = s.gf_debt;
         }
       } catch (e) {}
       const key = localStorage.getItem("ledger_key") || "";
@@ -1009,8 +1009,6 @@
         appState.settings.period_start;
       document.getElementById("cfgBudget").value =
         appState.settings.total_budget;
-      document.getElementById("cfgGfDebt").value =
-        appState.settings.gf_debt || "";
       document.getElementById("cfgKey").value = key;
       document.getElementById("cfgScope").value = scope;
 
@@ -1023,14 +1021,12 @@
         10
       );
       const budget = parseFloat(document.getElementById("cfgBudget").value);
-      const gf = parseFloat(document.getElementById("cfgGfDebt").value);
       const key = (document.getElementById("cfgKey").value || "").trim();
       const scopeVal = document.getElementById("cfgScope").value || "current";
 
       appState.settings = {
         period_start: isNaN(start) ? 10 : start,
         total_budget: isNaN(budget) ? 3500 : budget,
-        gf_debt: isNaN(gf) ? 0 : gf,
       };
       appState.ledgerKey = key;
       appState.scope = scopeVal;
@@ -1071,19 +1067,8 @@
         if (balanceHint) balanceHint.textContent = "未设置余额锚点";
       }
 
-      const gf = appState.settings.gf_debt || 0;
-      const rate = 0.015; // 千五左右
-      const interest = gf * rate;
-
       document.getElementById("valBalance").innerText =
         "¥" + displayBal.toFixed(2);
-      if (gf > 0) {
-        document.getElementById("valGfDebt").innerText =
-          "¥" + gf.toFixed(0) + "（月息约 ¥" + interest.toFixed(0) + "）";
-      } else {
-        document.getElementById("valGfDebt").innerText =
-          "无负债或未填写";
-      }
     }
 
     function renderCreditCards() {
@@ -1100,12 +1085,7 @@
           cardData.anchorAmount,
           formatDateLocal(today)
         );
-        const predicted = calcCardInterest(
-          cardData,
-          cycle.periodStart,
-          cycle.dueDate,
-          card.daily_rate
-        );
+        const beforeStatement = today < cycle.statementDate;
         const anchorLate =
           cardData.anchor &&
           parseYMDLocal(cardData.anchor.date) > cycle.periodStart;
@@ -1114,11 +1094,28 @@
               2
             )}`
           : "未找到欠款锚点，默认从 0 开始累计。";
-        const warnText = anchorLate
-          ? `锚点晚于本期起算日（${formatDateLocal(
-              cycle.periodStart
-            )}），若到期未全额还清，预计利息可能低估。`
-          : "";
+
+        let potentialBlock = "<div class=\"label\">本期未出账，利息预测不展示</div>";
+        if (!beforeStatement) {
+          const predicted = calcCardInterest(
+            cardData,
+            cycle.periodStart,
+            cycle.dueDate,
+            card.daily_rate
+          );
+          const warnText = anchorLate
+            ? `锚点晚于本期起算日（${formatDateLocal(
+                cycle.periodStart
+              )}），若到期未全额还清，预计利息可能低估。`
+            : "";
+          potentialBlock = `<div class=\"label\">潜在利息（若到期未全额还清）：¥${predicted.toFixed(
+            2
+          )}</div>${
+            warnText
+              ? `<div class=\"label warning\">${warnText}</div>`
+              : ""
+          }`;
+        }
         return `<div class="credit-row">
             <div>
               <div class="metric-label">${card.name}</div>
@@ -1127,16 +1124,13 @@
           card.due_day
         } · 日利率 ${card.daily_rate}</div>
               <div class="label">${anchorHint}</div>
-              ${warnText ? `<div class="label warning">${warnText}</div>` : ""}
             </div>
             <div style="text-align:right; align-self:center;">
               <div class="label">下一次到期日：${formatDateLocal(
                 cycle.dueDate
               )}</div>
-              <div class="label">若到期未全额还清：预计本期利息 ¥${predicted.toFixed(
-                2
-              )}</div>
-              <div class="label">到期日前利息按 0 展示</div>
+              <div class="label">当前应计利息：¥0.00</div>
+              ${potentialBlock}
             </div>
           </div>`;
       });
