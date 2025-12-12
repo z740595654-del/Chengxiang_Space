@@ -875,37 +875,46 @@
       return anchors.sort(compareTxOrder)[anchors.length - 1];
     }
 
+    function buildDateForMonth(year, month, day) {
+      const d = new Date(year, month, day);
+      if (d.getMonth() !== month) return new Date(year, month + 1, 0);
+      return d;
+    }
+
+    function dueFromStatement(card, statementDate) {
+      const y = statementDate.getFullYear();
+      const m = statementDate.getMonth();
+      const dueMonth = card.due_day <= card.statement_day ? m + 1 : m;
+      return buildDateForMonth(y, dueMonth, card.due_day);
+    }
+
     function buildCardCycle(card, refDate) {
       if (!card) return null;
-      let year = refDate.getFullYear();
-      let month = refDate.getMonth();
+      const y = refDate.getFullYear();
+      const m = refDate.getMonth();
 
-      for (let i = 0; i < 24; i++) {
-        const statementDate = new Date(year, month, card.statement_day);
-        let dueMonth = month;
-        let dueYear = year;
-        if (card.due_day <= card.statement_day) {
-          dueMonth += 1;
-          if (dueMonth > 11) {
-            dueMonth = 0;
-            dueYear += 1;
-          }
-        }
-        const dueDate = new Date(dueYear, dueMonth, card.due_day);
-        const periodStart = new Date(statementDate);
-        periodStart.setDate(periodStart.getDate() + 1);
+      const candidates = [-1, 0, 1].map((off) => {
+        const statementDate = buildDateForMonth(y, m + off, card.statement_day);
+        const dueDate = dueFromStatement(card, statementDate);
+        return { statementDate, dueDate };
+      });
 
-        if (dueDate >= refDate) {
-          return { statementDate, periodStart, dueDate };
-        }
+      const next = candidates
+        .filter((c) => c.dueDate >= refDate)
+        .sort((a, b) => a.dueDate - b.dueDate)[0];
 
-        month += 1;
-        if (month > 11) {
-          month = 0;
-          year += 1;
-        }
-      }
-      return null;
+      if (!next) return null;
+
+      const prevStatementDate = buildDateForMonth(
+        next.statementDate.getFullYear(),
+        next.statementDate.getMonth() - 1,
+        card.statement_day
+      );
+
+      const periodStart = new Date(prevStatementDate);
+      periodStart.setDate(periodStart.getDate() + 1);
+
+      return { statementDate: next.statementDate, periodStart, dueDate: next.dueDate };
     }
 
     function buildCardData(card) {
@@ -1085,7 +1094,6 @@
           cardData.anchorAmount,
           formatDateLocal(today)
         );
-        const beforeStatement = today < cycle.statementDate;
         const anchorLate =
           cardData.anchor &&
           parseYMDLocal(cardData.anchor.date) > cycle.periodStart;
@@ -1095,27 +1103,24 @@
             )}`
           : "未找到欠款锚点，默认从 0 开始累计。";
 
-        let potentialBlock = "<div class=\"label\">本期未出账，利息预测不展示</div>";
-        if (!beforeStatement) {
-          const predicted = calcCardInterest(
-            cardData,
-            cycle.periodStart,
-            cycle.dueDate,
-            card.daily_rate
-          );
-          const warnText = anchorLate
-            ? `锚点晚于本期起算日（${formatDateLocal(
-                cycle.periodStart
-              )}），若到期未全额还清，预计利息可能低估。`
-            : "";
-          potentialBlock = `<div class=\"label\">潜在利息（若到期未全额还清）：¥${predicted.toFixed(
-            2
-          )}</div>${
-            warnText
-              ? `<div class=\"label warning\">${warnText}</div>`
-              : ""
-          }`;
-        }
+        const predicted = calcCardInterest(
+          cardData,
+          cycle.periodStart,
+          cycle.dueDate,
+          card.daily_rate
+        );
+
+        const warnText = anchorLate
+          ? `锚点晚于本期起算日（${formatDateLocal(
+              cycle.periodStart
+            )}），若到期未全额还清，预计利息可能低估。`
+          : "";
+
+        const potentialBlock = `
+          <div class="label">潜在利息（若到期未全额还清）：¥${predicted.toFixed(2)}</div>
+          <div class="label">（仅基于已入账流水；未来新增消费/还款会改变预测）</div>
+          ${warnText ? `<div class="label warning">${warnText}</div>` : ""}
+        `;
         return `<div class="credit-row">
             <div>
               <div class="metric-label">${card.name}</div>
