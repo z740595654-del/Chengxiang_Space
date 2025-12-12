@@ -678,6 +678,8 @@
       periodChoices: [], // 数据中存在的所有账期
       lastBScope: [], // 最近一次用于图表的 B 口径数据
       burnView: "auto", // auto | toDate | full
+      creditCards: [],
+      cardData: {},
     };
 
     window.onload = async () => {
@@ -778,6 +780,48 @@
       if (!normalized) return null;
       const d = new Date(`${normalized}T00:00:00`);
       return isNaN(d) ? null : d;
+    }
+
+    function buildDateForMonth(year, month, day) {
+      const d = new Date(year, month, day);
+      if (d.getMonth() !== month) return new Date(year, month + 1, 0); // 溢出钳制到当月最后一天
+      return d;
+    }
+
+    function dueFromStatement(card, statementDate) {
+      const y = statementDate.getFullYear();
+      const m = statementDate.getMonth();
+      const dueMonth = card.due_day <= card.statement_day ? m + 1 : m;
+      return buildDateForMonth(y, dueMonth, card.due_day);
+    }
+
+    function buildCardCycle(card, refDate) {
+      const y = refDate.getFullYear();
+      const m = refDate.getMonth();
+
+      // 候选：上月/本月/下月的账单日 -> 对应到期日，选“下一次到期日（>=今天）里最早的”
+      const candidates = [-1, 0, 1].map((off) => {
+        const statementDate = buildDateForMonth(y, m + off, card.statement_day);
+        const dueDate = dueFromStatement(card, statementDate);
+        return { statementDate, dueDate };
+      });
+
+      const next = candidates
+        .filter((c) => c.dueDate >= refDate)
+        .sort((a, b) => a.dueDate - b.dueDate)[0];
+
+      if (!next) return null;
+
+      const prevStatementDate = buildDateForMonth(
+        next.statementDate.getFullYear(),
+        next.statementDate.getMonth() - 1,
+        card.statement_day
+      );
+
+      const periodStart = new Date(prevStatementDate);
+      periodStart.setDate(periodStart.getDate() + 1);
+
+      return { statementDate: next.statementDate, periodStart, dueDate: next.dueDate };
     }
 
     function getTxSeq(txId) {
@@ -930,6 +974,73 @@
         document.getElementById("valGfDebt").innerText =
           "无负债或未填写";
       }
+    }
+
+    /* ========== 信用卡利息预测 ========== */
+    function calcCardInterest(cardData, periodStart, dueDate, dailyRate) {
+      const txs = Array.isArray(cardData?.tx) ? cardData.tx : [];
+      const basePrincipal = Number(cardData?.principal || cardData?.balance || 0);
+      const totalPrincipal = txs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), basePrincipal);
+      const days = Math.max(
+        0,
+        Math.ceil((parseYMDLocal(formatDateLocal(dueDate)) - parseYMDLocal(formatDateLocal(periodStart))) / 86400000)
+      );
+      const rate = Number(dailyRate) || 0;
+      if (!rate || !totalPrincipal || !days) return 0;
+      return totalPrincipal * rate * days;
+    }
+
+    function renderCreditCards() {
+      const wrap = document.getElementById("creditCardList");
+      if (!wrap) return;
+
+      const today = parseYMDLocal(appState.today);
+      const cards = Array.isArray(appState.creditCards)
+        ? appState.creditCards
+        : [];
+
+      if (!cards.length) {
+        wrap.innerHTML = '<div class="label">暂无信用卡配置</div>';
+        return;
+      }
+
+      const blocks = cards
+        .map((card) => {
+          const cycle = buildCardCycle(card, today);
+          if (!cycle) return "";
+          const cardData = appState.cardData[card.id] || {};
+
+          const predicted = calcCardInterest(
+            cardData,
+            cycle.periodStart,
+            cycle.dueDate,
+            card.daily_rate
+          );
+
+          const anchorLate =
+            cardData.anchor && parseYMDLocal(cardData.anchor.date) > cycle.periodStart;
+
+          const warnText = anchorLate
+            ? `锚点晚于本期起算日（${formatDateLocal(
+                cycle.periodStart
+              )}），若到期未全额还清，预计利息可能低估。`
+            : "";
+
+          const potentialBlock = `
+            <div class="label">潜在利息（若到期未全额还清）：¥${predicted.toFixed(2)}</div>
+            <div class="label">（仅基于已入账流水；未来新增消费/还款会改变预测）</div>
+            ${warnText ? `<div class="label warning">${warnText}</div>` : ""}
+          `;
+
+          return `
+            <div class="label">当前应计利息：¥0.00</div>
+            ${potentialBlock}
+          `;
+        })
+        .filter(Boolean)
+        .join("");
+
+      wrap.innerHTML = blocks || '<div class="label">暂无信用卡数据</div>';
     }
 
     function toggleConfig() {
@@ -1245,6 +1356,7 @@
 
       // 更新资产卡（余额跟随流水）
       renderAssets();
+      renderCreditCards();
 
       const remainLabelEl =
         document.getElementById("lblRemainTitle");
