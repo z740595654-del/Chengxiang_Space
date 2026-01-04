@@ -1083,33 +1083,123 @@
       loadTransactions();
     }
 
-    /* ========== 顶部资产卡：余额 & 广发 ========== */
+    /* ========== 顶部资产卡：余额（现金口径） & 广发 ==========
+       现金口径规则：
+       - 仅统计锚点之后、非元数据、非小鹅（tx.is_xiaoe 为 true/1/"1"）的交易
+       - 收入：信用卡账户不计入现金，其余记为现金流入
+       - 还款：一律视为现金流出
+       - 往来：描述以 "+" 前缀或命中转入关键词视为转入，否则为转出；"-" 前缀显式转出
+       - 其他类别：信用卡账户视为刷卡不影响现金，其余视为现金支出 */
     function renderAssets() {
       let displayBal = 0;
       const balanceHint = document.getElementById("valBalanceHint");
       if (balanceHint) balanceHint.textContent = "";
 
       const anchor = findLatestBalanceAnchor(appState.transactions);
+      const debug = { anchor };
       if (anchor) {
         const baseBalance = Number(anchor.amount) || 0;
+        const creditAccounts = new Set(
+          CREDIT_CARDS.map((c) => c.name)
+        );
+        creditAccounts.add("信用卡");
+
         let delta = 0;
+        let incomeCash = 0;
+        let expenseCash = 0;
+        let ignoredCreditSpend = 0;
+        let transferIn = 0;
+        let transferOut = 0;
+
         for (const tx of appState.transactions) {
           if (isMetaTx(tx)) continue;
           if (!isTxAfterAnchor(tx, anchor)) continue;
-          if (tx.category_level1 === "收入") {
-            delta += tx.amount;
+          const isXiaoe = tx && (tx.is_xiaoe === true || tx.is_xiaoe === 1 || tx.is_xiaoe === "1");
+          if (isXiaoe) continue;
+
+          const l1 = tx.category_level1 || "";
+          const account = tx.account || "";
+          const amount = Number(tx.amount) || 0;
+          const desc = String(tx.description || "");
+          const isCreditAccount = creditAccounts.has(account);
+
+          if (l1 === "收入") {
+            if (!isCreditAccount) {
+              delta += amount;
+              incomeCash += amount;
+            }
+          } else if (l1 === "还款") {
+            delta -= amount;
+            expenseCash += amount;
+          } else if (l1 === "往来") {
+            const trimmedDesc = desc.trim();
+            let isIn = false;
+            if (trimmedDesc.startsWith("+")) {
+              isIn = true;
+            } else if (trimmedDesc.startsWith("-")) {
+              isIn = false;
+            } else {
+              const transferInKeywords = [
+                "转入余额",
+                "结算转入",
+                "提现",
+                "报销",
+                "回款",
+                "退回",
+                "返还",
+                "收款",
+              ];
+              isIn = transferInKeywords.some((k) => desc.includes(k));
+            }
+            if (isIn) {
+              delta += amount;
+              incomeCash += amount;
+              transferIn += amount;
+            } else {
+              delta -= amount;
+              expenseCash += amount;
+              transferOut += amount;
+            }
           } else {
-            delta -= tx.amount;
+            if (isCreditAccount) {
+              ignoredCreditSpend += amount;
+            } else {
+              delta -= amount;
+              expenseCash += amount;
+            }
           }
         }
+
         displayBal = baseBalance + delta;
+        const netTransfer = transferIn - transferOut;
+        const hintText = `基准 ${anchor.date} ¥${baseBalance.toFixed(
+          2
+        )}｜收入+${incomeCash.toFixed(
+          2
+        )}｜支出-${expenseCash.toFixed(
+          2
+        )}｜忽略信用卡消费 ${ignoredCreditSpend.toFixed(
+          2
+        )}｜往来净额 ${netTransfer.toFixed(2)}`;
+        if (balanceHint) balanceHint.textContent = hintText;
+        debug.cash = {
+          baseBalance,
+          incomeCash,
+          expenseCash,
+          ignoredCreditSpend,
+          transferIn,
+          transferOut,
+          netTransfer,
+          displayBal,
+        };
       } else {
         displayBal = 0;
-        if (balanceHint) balanceHint.textContent = "未设置余额锚点";
+        if (balanceHint) balanceHint.textContent = "未设置基准余额记录";
       }
 
       document.getElementById("valBalance").innerText =
         "¥" + displayBal.toFixed(2);
+      console.debug("[renderAssets cash]", debug);
     }
 
     function renderCreditCards() {
