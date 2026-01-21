@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>旅行账本</title>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --text: #f1f5f9;
+      --dim: #94a3b8;
+      --border: 1px solid rgba(255, 255, 255, 0.1);
+      --input-bg: #0f172a;
+      --input-border: #334155;
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+      --bar-bg: #334155;
+      --green: #22c55e;
+      --red: #ef4444;
+      --blue: #3b82f6;
+      --orange: #f59e0b;
+    }
+    html[data-theme="light"] {
+      --bg: #f1f5f9;
+      --panel: #ffffff;
+      --text: #0f172a;
+      --dim: #64748b;
+      --border: 1px solid #e2e8f0;
+      --input-bg: #ffffff;
+      --input-border: #cbd5e1;
+      --shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.08);
+      --bar-bg: #e2e8f0;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        system-ui, sans-serif;
+      margin: 0;
+      padding: 10px 12px 40px;
+      transition: background 0.25s ease, color 0.25s ease;
+    }
+    .page-wrap {
+      max-width: 1100px;
+      margin: 48px auto 0;
+    }
+    .card {
+      background: var(--panel);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 12px;
+      border: var(--border);
+      box-shadow: var(--shadow);
+      transition: background 0.25s ease, border 0.25s ease,
+        box-shadow 0.25s ease;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .label {
+      color: var(--dim);
+      font-size: 0.78rem;
+    }
+    .value {
+      font-size: 1.2rem;
+      font-weight: 600;
+      font-family: "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono",
+        "Courier New", monospace;
+    }
+    input,
+    select,
+    textarea {
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      color: var(--text);
+      padding: 7px 8px;
+      border-radius: 8px;
+      width: 100%;
+      box-sizing: border-box;
+      margin-bottom: 6px;
+      font-size: 0.85rem;
+    }
+    button {
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      width: 100%;
+    }
+    button.secondary {
+      background: var(--input-border);
+      color: var(--text);
+    }
+    button:active {
+      transform: translateY(1px);
+      opacity: 0.9;
+    }
+    button.small {
+      width: auto;
+      padding: 6px 10px;
+      font-size: 0.8rem;
+    }
+    .nav-btns {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 20;
+      display: flex;
+      gap: 8px;
+    }
+    .circle-btn {
+      width: 34px;
+      height: 34px;
+      background: var(--panel);
+      color: var(--text);
+      border: var(--border);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      font-size: 1rem;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 12px;
+    }
+    .itinerary-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .itinerary-item {
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--input-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+    .itinerary-item.active {
+      border-color: var(--blue);
+      background: rgba(59, 130, 246, 0.12);
+    }
+    .itinerary-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .muted {
+      color: var(--dim);
+      font-size: 0.75rem;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .chart-box {
+      width: 100%;
+      height: 240px;
+    }
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    .table th,
+    .table td {
+      border-bottom: 1px solid var(--input-border);
+      padding: 6px 4px;
+      text-align: left;
+    }
+    .table th {
+      color: var(--dim);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      background: rgba(148, 163, 184, 0.15);
+      color: var(--dim);
+    }
+    .tx-selector {
+      max-height: 360px;
+      overflow: auto;
+      border: 1px solid var(--input-border);
+      border-radius: 12px;
+    }
+    .tx-row {
+      display: grid;
+      grid-template-columns: 90px 90px 1.4fr 0.8fr 0.8fr 120px;
+      gap: 6px;
+      align-items: center;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--input-border);
+      font-size: 0.8rem;
+    }
+    .tx-row:last-child {
+      border-bottom: none;
+    }
+    .tx-header {
+      background: rgba(148, 163, 184, 0.08);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    @media (max-width: 960px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+      .tx-row {
+        grid-template-columns: 80px 70px 1fr 1fr;
+        grid-auto-rows: auto;
+      }
+      .tx-row .tx-account,
+      .tx-row .tx-id,
+      .tx-row .tx-action {
+        grid-column: span 2;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="nav-btns">
+    <a href="index.html" class="circle-btn" title="返回主页">🏠</a>
+    <div
+      class="circle-btn"
+      id="themeIcon"
+      onclick="toggleTheme()"
+      title="切换主题"
+    >
+      🌙
+    </div>
+  </div>
+
+  <div class="page-wrap">
+    <div class="layout">
+      <div>
+        <div class="card">
+          <div class="row">
+            <h3 style="margin:0;">🧳 行程列表</h3>
+            <span class="tag">旅行账本</span>
+          </div>
+          <div class="muted" style="margin-top:6px;">
+            仅记录 book=旅行 的交易。右侧统计会随行程切换。
+          </div>
+          <div class="itinerary-actions">
+            <button class="small" onclick="createItinerary()">新建行程</button>
+            <button class="small secondary" onclick="deleteItinerary()">删除行程</button>
+          </div>
+          <div class="itinerary-list" id="itineraryList"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="row">
+            <div>
+              <div class="label">当前视图</div>
+              <div class="value" id="currentItineraryName">全部旅行</div>
+            </div>
+            <div style="text-align:right;">
+              <div class="label">总支出</div>
+              <div class="value" id="totalSpend">¥0.00</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row">
+            <h3 style="margin:0;">📅 每日花费</h3>
+            <div class="label" id="dailyAvg">日均 ¥0.00</div>
+          </div>
+          <div id="dailyChart" class="chart-box"></div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 6px;">🧩 类别分布</h3>
+          <div id="bucketChart" class="chart-box"></div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 6px;">🏆 Top 10 支出</h3>
+          <div id="top10Table"></div>
+        </div>
+
+        <div class="card">
+          <div class="row">
+            <h3 style="margin:0;">🔖 交易选择器</h3>
+            <span class="label">加入/移出当前行程并打标签</span>
+          </div>
+          <div style="margin-top:8px;" class="tx-selector" id="txSelector"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const LEDGER_API_BASE = "https://czbpght.cn/ledger";
+    const STORAGE_KEY = "travel_itineraries_v1";
+    const BUCKETS = ["住宿", "交通", "餐饮", "项目", "购物", "其他"];
+
+    const appState = {
+      ledgerKey: "",
+      transactions: [],
+      travelTxs: [],
+      storage: {
+        version: 1,
+        itineraries: [],
+        txTagMap: {},
+      },
+      selectedId: "all",
+    };
+
+    window.onload = async () => {
+      initTheme();
+      initStorage();
+      appState.ledgerKey = localStorage.getItem("ledger_key") || "";
+      await loadTransactions();
+      renderAll();
+    };
+
+    function initTheme() {
+      const saved = localStorage.getItem("ledger_theme") || "dark";
+      setTheme(saved);
+    }
+    function toggleTheme() {
+      const cur = document.documentElement.getAttribute("data-theme") || "dark";
+      const next = cur === "light" ? "dark" : "light";
+      setTheme(next);
+    }
+    function setTheme(theme) {
+      document.documentElement.setAttribute("data-theme", theme);
+      localStorage.setItem("ledger_theme", theme);
+      const btn = document.getElementById("themeIcon");
+      if (btn) btn.innerText = theme === "light" ? "☀️" : "🌙";
+      renderCharts();
+    }
+
+    function initStorage() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.version === 1) {
+            appState.storage = {
+              version: 1,
+              itineraries: Array.isArray(parsed.itineraries)
+                ? parsed.itineraries
+                : [],
+              txTagMap: parsed.txTagMap && typeof parsed.txTagMap === "object"
+                ? parsed.txTagMap
+                : {},
+            };
+          }
+        }
+      } catch (e) {}
+      persistStorage();
+    }
+
+    function persistStorage() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appState.storage));
+    }
+
+    function buildHeaders() {
+      const h = {};
+      if (appState.ledgerKey) h["x-ledger-key"] = appState.ledgerKey;
+      return h;
+    }
+
+    async function apiGet(path) {
+      try {
+        const res = await fetch(LEDGER_API_BASE + path, {
+          headers: buildHeaders(),
+        });
+        if (res.status === 401) {
+          alert("访问被拒绝，请检查 ledger_key。");
+          return null;
+        }
+        if (!res.ok) {
+          alert("接口错误：" + res.status);
+          return null;
+        }
+        return await res.json();
+      } catch (e) {
+        alert("网络错误：" + e.message);
+        return null;
+      }
+    }
+
+    function formatDateLocal(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${dd}`;
+    }
+    function parseYMDLocal(ymd) {
+      const [y, m, d] = (ymd || "").split("-").map(Number);
+      if (!y || !m || !d) return new Date(ymd);
+      return new Date(y, m - 1, d);
+    }
+    function normalizeDateInput(str) {
+      if (!str) return str;
+      let s = String(str).trim();
+      s = s.replace(/[./]/g, "-");
+      const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      if (m) {
+        const y = m[1];
+        const mm = m[2].padStart(2, "0");
+        const dd = m[3].padStart(2, "0");
+        return `${y}-${mm}-${dd}`;
+      }
+      return s;
+    }
+    function parseDateStrict(str) {
+      const normalized = normalizeDateInput(str);
+      if (!normalized) return null;
+      const d = new Date(`${normalized}T00:00:00`);
+      return isNaN(d) ? null : d;
+    }
+    function normalizeTx(t) {
+      const parsedDate = parseDateStrict(t.date);
+      return {
+        tx_id: t.tx_id || t.id || null,
+        date: parsedDate ? formatDateLocal(parsedDate) : normalizeDateInput(t.date),
+        amount: Number(t.amount),
+        category_level1: t.category_level1 || "",
+        category_level2: t.category_level2 || "",
+        description: t.description || "",
+        account: t.account || "",
+        book: t.book || "",
+        is_xiaoe: Number(t.is_xiaoe) === 1,
+      };
+    }
+    function isBalanceAnchor(tx) {
+      return tx && tx.account === "BALANCE_ANCHOR";
+    }
+    function isMetaTx(tx) {
+      if (!tx) return false;
+      if (isBalanceAnchor(tx)) return true;
+      const l1 = String(tx.category_level1 || "");
+      const l2 = String(tx.category_level2 || "");
+      return l1.endsWith("锚点") || l2.endsWith("锚点");
+    }
+
+    async function loadTransactions() {
+      const data = await apiGet("/transactions");
+      appState.transactions = (data || []).map(normalizeTx);
+      appState.travelTxs = appState.transactions.filter(
+        (tx) => tx.book === "旅行" && !isMetaTx(tx)
+      );
+    }
+
+    function createItinerary() {
+      const name = prompt("行程名称？");
+      if (!name) return;
+      const now = new Date().toISOString();
+      const item = {
+        id: `t_${Date.now()}`,
+        name: name.trim(),
+        txIds: [],
+        createdAt: now,
+        updatedAt: now,
+      };
+      appState.storage.itineraries.push(item);
+      appState.selectedId = item.id;
+      persistStorage();
+      renderAll();
+    }
+
+    function deleteItinerary() {
+      if (appState.selectedId === "all") {
+        alert("“全部旅行”不可删除。");
+        return;
+      }
+      const idx = appState.storage.itineraries.findIndex(
+        (i) => i.id === appState.selectedId
+      );
+      if (idx === -1) return;
+      const name = appState.storage.itineraries[idx].name;
+      if (!confirm(`确认删除行程「${name}」？`)) return;
+      appState.storage.itineraries.splice(idx, 1);
+      appState.selectedId = "all";
+      persistStorage();
+      renderAll();
+    }
+
+    function renameItinerary(id) {
+      const it = appState.storage.itineraries.find((i) => i.id === id);
+      if (!it) return;
+      const name = prompt("新的行程名称", it.name);
+      if (!name) return;
+      it.name = name.trim();
+      it.updatedAt = new Date().toISOString();
+      persistStorage();
+      renderAll();
+    }
+
+    function getCurrentItinerary() {
+      if (appState.selectedId === "all") return null;
+      return appState.storage.itineraries.find(
+        (i) => i.id === appState.selectedId
+      );
+    }
+
+    function toggleTxInItinerary(txId) {
+      const it = getCurrentItinerary();
+      if (!it || !txId) return;
+      const idx = it.txIds.indexOf(txId);
+      if (idx >= 0) {
+        it.txIds.splice(idx, 1);
+      } else {
+        it.txIds.push(txId);
+      }
+      it.updatedAt = new Date().toISOString();
+      persistStorage();
+      renderAll();
+    }
+
+    function setTxBucket(txId, bucket) {
+      if (!txId) return;
+      appState.storage.txTagMap[txId] = { bucket };
+      persistStorage();
+      renderAll();
+    }
+
+    function getBucket(txId) {
+      if (!txId) return "其他";
+      const tag = appState.storage.txTagMap[txId];
+      return tag && BUCKETS.includes(tag.bucket) ? tag.bucket : "其他";
+    }
+
+    function getActiveTxs() {
+      const it = getCurrentItinerary();
+      if (!it) return appState.travelTxs;
+      const set = new Set(it.txIds || []);
+      return appState.travelTxs.filter((tx) => set.has(tx.tx_id));
+    }
+
+    function getSpendTxs(list) {
+      return list.filter((tx) => tx.category_level1 !== "收入");
+    }
+
+    function amountAbs(tx) {
+      const amt = Number(tx.amount) || 0;
+      return Math.abs(amt);
+    }
+
+    function renderAll() {
+      renderItineraryList();
+      renderSummary();
+      renderCharts();
+      renderTop10();
+      renderTxSelector();
+    }
+
+    function renderItineraryList() {
+      const container = document.getElementById("itineraryList");
+      const items = [];
+      items.push({ id: "all", name: "全部旅行", txIds: [] });
+      appState.storage.itineraries.forEach((it) => items.push(it));
+      container.innerHTML = items
+        .map((it) => {
+          const isActive = it.id === appState.selectedId;
+          const txCount = it.id === "all" ? appState.travelTxs.length : (it.txIds || []).length;
+          const editBtn =
+            it.id === "all"
+              ? ""
+              : `<button class="small secondary" onclick="event.stopPropagation(); renameItinerary('${it.id}')">✏️</button>`;
+          return `
+            <div class="itinerary-item ${isActive ? "active" : ""}" onclick="selectItinerary('${it.id}')">
+              <div>
+                <div style="font-weight:600;">${it.name}</div>
+                <div class="muted">${txCount} 笔</div>
+              </div>
+              <div>${editBtn}</div>
+            </div>
+          `;
+        })
+        .join("");
+      const currentName =
+        appState.selectedId === "all"
+          ? "全部旅行"
+          : (getCurrentItinerary() || {}).name || "-";
+      document.getElementById("currentItineraryName").innerText = currentName;
+    }
+
+    function selectItinerary(id) {
+      appState.selectedId = id;
+      renderAll();
+    }
+
+    function renderSummary() {
+      const spend = getSpendTxs(getActiveTxs());
+      const totalSpend = spend.reduce((sum, tx) => sum + amountAbs(tx), 0);
+      document.getElementById("totalSpend").innerText =
+        "¥" + totalSpend.toFixed(2);
+    }
+
+    function renderCharts() {
+      renderDailyChart();
+      renderBucketChart();
+    }
+
+    function renderDailyChart() {
+      const chartDiv = document.getElementById("dailyChart");
+      const avgEl = document.getElementById("dailyAvg");
+      const spendTxs = getSpendTxs(getActiveTxs());
+      if (!spendTxs.length) {
+        chartDiv.innerHTML = '<div class="label">暂无支出记录。</div>';
+        avgEl.innerText = "日均 ¥0.00";
+        return;
+      }
+
+      const dailyMap = {};
+      spendTxs.forEach((tx) => {
+        if (!tx.date) return;
+        dailyMap[tx.date] = (dailyMap[tx.date] || 0) + amountAbs(tx);
+      });
+      const dates = Object.keys(dailyMap).sort();
+      const minDate = parseYMDLocal(dates[0]);
+      const maxDate = parseYMDLocal(dates[dates.length - 1]);
+      const fullDates = [];
+      const amounts = [];
+      const cursor = new Date(minDate);
+      while (cursor <= maxDate) {
+        const ds = formatDateLocal(cursor);
+        fullDates.push(ds);
+        amounts.push(dailyMap[ds] || 0);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+
+      const totalSpend = amounts.reduce((sum, v) => sum + v, 0);
+      const days = Math.max(1, fullDates.length);
+      const avg = totalSpend / days;
+      avgEl.innerText = `日均 ¥${avg.toFixed(2)}`;
+
+      const theme = document.documentElement.getAttribute("data-theme") || "dark";
+      const textColor = theme === "light" ? "#64748b" : "#cbd5f5";
+      const gridColor = theme === "light" ? "#e2e8f0" : "#334155";
+      const trace = {
+        x: fullDates,
+        y: amounts,
+        type: "scatter",
+        mode: "lines+markers",
+        line: { color: "#3b82f6", width: 2 },
+        marker: { size: 5 },
+      };
+      const layout = {
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        font: { color: textColor },
+        margin: { t: 10, l: 40, r: 10, b: 32 },
+        xaxis: { gridcolor: gridColor, tickangle: -45 },
+        yaxis: { gridcolor: gridColor },
+      };
+      Plotly.newPlot(chartDiv, [trace], layout, { displayModeBar: false });
+    }
+
+    function renderBucketChart() {
+      const chartDiv = document.getElementById("bucketChart");
+      const spendTxs = getSpendTxs(getActiveTxs());
+      if (!spendTxs.length) {
+        chartDiv.innerHTML = '<div class="label">暂无支出记录。</div>';
+        return;
+      }
+      const totals = {};
+      BUCKETS.forEach((b) => (totals[b] = 0));
+      spendTxs.forEach((tx) => {
+        const bucket = getBucket(tx.tx_id);
+        totals[bucket] += amountAbs(tx);
+      });
+
+      const theme = document.documentElement.getAttribute("data-theme") || "dark";
+      const textColor = theme === "light" ? "#64748b" : "#cbd5f5";
+      const gridColor = theme === "light" ? "#e2e8f0" : "#334155";
+      const trace = {
+        x: BUCKETS,
+        y: BUCKETS.map((b) => totals[b]),
+        type: "bar",
+        marker: { color: "#22c55e" },
+      };
+      const layout = {
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        font: { color: textColor },
+        margin: { t: 10, l: 40, r: 10, b: 32 },
+        xaxis: { gridcolor: gridColor },
+        yaxis: { gridcolor: gridColor },
+      };
+      Plotly.newPlot(chartDiv, [trace], layout, { displayModeBar: false });
+    }
+
+    function renderTop10() {
+      const container = document.getElementById("top10Table");
+      const spendTxs = getSpendTxs(getActiveTxs());
+      if (!spendTxs.length) {
+        container.innerHTML = '<div class="label">暂无支出记录。</div>';
+        return;
+      }
+      const top = spendTxs
+        .slice()
+        .sort((a, b) => amountAbs(b) - amountAbs(a))
+        .slice(0, 10);
+      const rows = top
+        .map((tx) => {
+          return `
+            <tr>
+              <td>${tx.date}</td>
+              <td>¥${amountAbs(tx).toFixed(2)}</td>
+              <td>${getBucket(tx.tx_id)}</td>
+              <td>${tx.description || tx.category_level2 || "-"}</td>
+              <td>${tx.account || "-"}</td>
+              <td>${tx.tx_id || "-"}</td>
+            </tr>
+          `;
+        })
+        .join("");
+      container.innerHTML = `
+        <table class="table">
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>金额</th>
+              <th>桶</th>
+              <th>用途/描述</th>
+              <th>账户</th>
+              <th>tx_id</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    function renderTxSelector() {
+      const container = document.getElementById("txSelector");
+      if (!appState.travelTxs.length) {
+        container.innerHTML = '<div class="label" style="padding:10px;">暂无旅行交易。</div>';
+        return;
+      }
+      const it = getCurrentItinerary();
+      const selectedSet = new Set(it ? it.txIds || [] : []);
+      const rows = appState.travelTxs
+        .slice()
+        .sort((a, b) => (a.date < b.date ? 1 : -1))
+        .map((tx) => {
+          const bucket = getBucket(tx.tx_id);
+          const inTrip = it ? selectedSet.has(tx.tx_id) : false;
+          const btnText = it ? (inTrip ? "移出" : "加入") : "仅查看";
+          const disabled = it ? "" : "disabled";
+          const txId = tx.tx_id || "";
+          const txIdDisplay = tx.tx_id || "-";
+          return `
+            <div class="tx-row">
+              <div>${tx.date}</div>
+              <div>¥${amountAbs(tx).toFixed(2)}</div>
+              <div>${tx.description || tx.category_level2 || "-"}</div>
+              <div class="tx-account">${tx.account || "-"}</div>
+              <div class="tx-id">${txIdDisplay}</div>
+              <div class="tx-action">
+                <select data-txid="${txId}" class="bucket-select">
+                  ${BUCKETS.map((b) => `<option value="${b}" ${b === bucket ? "selected" : ""}>${b}</option>`).join("")}
+                </select>
+                <button class="small" data-txid="${txId}" data-action="toggle" ${disabled}>${btnText}</button>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+      container.innerHTML = `
+        <div class="tx-row tx-header">
+          <div>日期</div>
+          <div>金额</div>
+          <div>用途/描述</div>
+          <div class="tx-account">账户</div>
+          <div class="tx-id">tx_id</div>
+          <div class="tx-action">操作</div>
+        </div>
+        ${rows}
+      `;
+
+      container.querySelectorAll(".bucket-select").forEach((sel) => {
+        sel.addEventListener("change", (e) => {
+          const txId = e.target.getAttribute("data-txid");
+          const val = e.target.value;
+          setTxBucket(txId, val);
+        });
+      });
+      container.querySelectorAll("button[data-action='toggle']").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          const txId = e.target.getAttribute("data-txid");
+          toggleTxInItinerary(txId);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
