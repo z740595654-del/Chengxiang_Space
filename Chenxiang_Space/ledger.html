@@ -613,7 +613,10 @@
             <option value="余额">余额</option>
             <option value="信用卡">信用卡</option>
           </select>
-          <input type="text" id="inBook" placeholder="账本，如：主账" value="主账" />
+          <select id="inBook">
+            <option value="主账">主账</option>
+            <option value="旅行">旅行</option>
+          </select>
         </div>
         <div class="grid-2">
           <select id="inXiao">
@@ -865,7 +868,6 @@
     function findLatestCardAnchor(txs, accountName) {
       const anchors = txs.filter((tx) => {
         if (tx.account !== accountName) return false;
-        if (tx.book !== "主账") return false;
         if (Number(tx.is_xiaoe) === 1) return false;
         const l1 = String(tx.category_level1 || "");
         const l2 = String(tx.category_level2 || "");
@@ -923,7 +925,6 @@
     function buildCardData(card) {
       const txs = appState.transactions.filter((tx) => {
         if (tx.account !== card.name) return false;
-        if (tx.book !== "主账") return false;
         return Number(tx.is_xiaoe) !== 1;
       });
       const anchor = findLatestCardAnchor(txs, card.name);
@@ -1556,7 +1557,9 @@
     }
 
     function getStatTransactions() {
-      return appState.transactions.filter((tx) => !isMetaTx(tx));
+      return appState.transactions.filter(
+        (tx) => !isMetaTx(tx) && tx.book === "主账"
+      );
     }
 
     function filterBBase(list) {
