@@ -248,6 +248,28 @@
       column-gap: 6px;
       align-items: center;
     }
+    .tx-actions {
+      margin-top: 6px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .tx-action-btn {
+      border: 1px solid var(--input-border);
+      background: transparent;
+      color: var(--dim);
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      width: auto;
+      cursor: pointer;
+    }
+    .tx-action-btn.active {
+      background: rgba(59, 130, 246, 0.18);
+      border-color: rgba(59, 130, 246, 0.7);
+      color: var(--text);
+    }
     .tx-meta {
       color: var(--dim);
       font-size: 0.7rem;
@@ -644,10 +666,10 @@
       <div id="bigList" class="label" style="margin-top: 6px"></div>
     </div>
 
-    <!-- 旅行卡片 -->
+    <!-- 旅游卡片 -->
     <div class="card" id="travelCard">
       <div class="row" style="align-items: center">
-        <h3>🧳 旅行</h3>
+        <h3>🧳 旅游</h3>
         <span class="label" id="travelSelectedCount">已选 0 笔</span>
       </div>
       <div class="travel-section">
@@ -747,7 +769,7 @@
           </select>
           <select id="inBook">
             <option value="主账">主账</option>
-            <option value="旅行">旅行</option>
+            <option value="旅游">旅游</option>
           </select>
         </div>
         <div class="grid-2">
@@ -820,7 +842,7 @@
   <div id="travelModal" class="travel-modal">
     <div class="travel-modal-content">
       <div class="row" style="align-items: center">
-        <h3>选择旅行交易</h3>
+        <h3>选择旅游交易</h3>
         <button class="secondary" style="width: auto" onclick="closeTravelModal()">
           关闭
         </button>
@@ -869,6 +891,7 @@
       period: { start: "", end: "", days: 0 },
       today: formatDateLocal(new Date()),
       excludedTxIds: [], // 被剔除的大额消费 tx_id 列表
+      bigTxIds: [], // 标记为大额消费的 tx_id 列表
       periodChoices: [], // 数据中存在的所有账期
       lastBScope: [], // 最近一次用于图表的 B 口径数据
       burnView: "auto", // auto | toDate | full
@@ -1219,15 +1242,32 @@
         appState.burnView = burnPref;
       }
 
-      // 剔除的大额 tx_id 列表
+      const normalizeIdList = (val) => {
+        if (!Array.isArray(val)) return [];
+        const next = val.filter((id) => id !== null && id !== undefined && id !== "");
+        return Array.from(new Set(next));
+      };
+
+      // 剔除分析的 tx_id 列表
       try {
         const excl = localStorage.getItem("ledger_excluded_tx");
         if (excl) {
           const arr = JSON.parse(excl);
-          if (Array.isArray(arr)) appState.excludedTxIds = arr;
+          appState.excludedTxIds = normalizeIdList(arr);
         }
       } catch (e) {
         appState.excludedTxIds = [];
+      }
+
+      // 标记为大额消费的 tx_id 列表
+      try {
+        const big = localStorage.getItem("ledger_big_tx");
+        if (big) {
+          const arr = JSON.parse(big);
+          appState.bigTxIds = normalizeIdList(arr);
+        }
+      } catch (e) {
+        appState.bigTxIds = [];
       }
 
       // 写回配置面板
@@ -1571,6 +1611,8 @@
     }
 
     function normalizeTx(t) {
+      const rawBook = t.book || "";
+      const normalizedBook = rawBook === "旅行" ? "旅游" : rawBook;
       const parsedDate = parseDateStrict(t.date);
       return {
         tx_id: t.tx_id || t.id || null,
@@ -1580,7 +1622,7 @@
         category_level2: t.category_level2 || "",
         description: t.description || "",
         account: t.account || "",
-        book: t.book || "",
+        book: normalizedBook || "",
         is_xiaoe: Number(t.is_xiaoe) === 1,
       };
     }
@@ -1593,7 +1635,7 @@
       const nonMeta = appState.transactions.filter((tx) => !isMetaTx(tx));
       appState.allNonMetaTxs = nonMeta;
       appState.mainTxs = nonMeta.filter((tx) => getBookName(tx) === "主账");
-      appState.travelTxs = nonMeta.filter((tx) => getBookName(tx) === "旅行");
+      appState.travelTxs = nonMeta.filter((tx) => getBookName(tx) === "旅游");
     }
 
     function rebuildPeriodOptions() {
@@ -2207,27 +2249,27 @@ function classifyCategory(tx) {
         return;
       }
 
-      const excludedSet = new Set(appState.excludedTxIds || []);
+      const bigSet = new Set(appState.bigTxIds || []);
       const today = parseYMDLocal(appState.today);
       const BIG_THRESHOLD = 500; // 默认大额阈值
 
-      const excluded = data
-        .filter((tx) => tx.tx_id && excludedSet.has(tx.tx_id))
+      const selected = data
+        .filter((tx) => tx.tx_id && bigSet.has(tx.tx_id))
         .sort((a, b) => new Date(b.date) - new Date(a.date));
       const candidates = data
         .filter(
           (tx) =>
             tx.tx_id &&
-            !excludedSet.has(tx.tx_id) &&
+            !bigSet.has(tx.tx_id) &&
             tx.amount >= BIG_THRESHOLD
         )
         .sort((a, b) => b.amount - a.amount);
 
       let selectedHtml = "";
-      if (excluded.length) {
+      if (selected.length) {
         selectedHtml +=
-          '<div class="label" style="margin-bottom:6px;">已标记为大额消费（不计入预算与图表）</div>';
-        excluded.forEach((tx) => {
+          '<div class="label" style="margin-bottom:6px;">已标记的大额消费</div>';
+        selected.forEach((tx) => {
           const d = new Date(tx.date);
           const diffDays = Math.max(
             1,
@@ -2241,7 +2283,7 @@ function classifyCategory(tx) {
             "未命名消费";
           selectedHtml += `<div style="margin-bottom:6px;">
               <label>
-                <input type="checkbox" data-txid="${tx.tx_id}" onchange="toggleExclude(this)" checked />
+                <input type="checkbox" data-txid="${tx.tx_id}" onchange="toggleBig(this)" checked />
                 ${tx.date} · ${title} · ¥${tx.amount.toFixed(2)}
               </label>
               <div class="tx-meta">已拥有 ${diffDays} 天 · 日均摊 ¥${perDay.toFixed(
@@ -2257,7 +2299,7 @@ function classifyCategory(tx) {
         '<details class="big-dropdown" open>\n' +
         '  <summary style="cursor:pointer; font-weight:600; color: var(--text);">选择候选大额支出（金额 ≥ ¥500）</summary>\n';
       candidateHtml +=
-        '  <div class="tx-meta" style="margin:6px 0 8px;">检索范围：整个账本，勾选后将进入左侧列表并从其他计算维度剔除。</div>';
+        '  <div class="tx-meta" style="margin:6px 0 8px;">检索范围：整个账本，勾选后将进入左侧列表。</div>';
       if (!candidates.length) {
         candidateHtml +=
           '  <div class="tx-meta">暂无符合金额阈值的候选条目。</div>';
@@ -2271,7 +2313,7 @@ function classifyCategory(tx) {
             "未命名消费";
           candidateHtml += `<div style="margin-bottom:4px;">
               <label>
-                <input type="checkbox" data-txid="${tx.tx_id}" onchange="toggleExclude(this)" />
+                <input type="checkbox" data-txid="${tx.tx_id}" onchange="toggleBig(this)" />
                 ${tx.date} · ${title} · ¥${tx.amount.toFixed(2)}
               </label>
             </div>`;
@@ -2300,6 +2342,22 @@ function classifyCategory(tx) {
       appState.excludedTxIds = arr;
       localStorage.setItem("ledger_excluded_tx", JSON.stringify(arr));
       renderAll();
+    }
+
+    function toggleBig(checkbox) {
+      const txId = checkbox.getAttribute("data-txid");
+      if (!txId) return;
+      let arr = Array.isArray(appState.bigTxIds)
+        ? appState.bigTxIds.slice()
+        : [];
+      if (checkbox.checked) {
+        if (!arr.includes(txId)) arr.push(txId);
+      } else {
+        arr = arr.filter((id) => id !== txId);
+      }
+      appState.bigTxIds = arr;
+      localStorage.setItem("ledger_big_tx", JSON.stringify(arr));
+      renderBigPurchases(filterBBase(getStatTransactions()));
     }
 
     /* ========== CFO 总评 ========== */
@@ -2805,6 +2863,9 @@ function classifyCategory(tx) {
             ${t.category_level1 === "收入" ? "+" : "-"}¥${t.amount.toFixed(
             2
           )}
+            <div class="tx-actions">
+              ${renderTxActions(t)}
+            </div>
           </div>
         </div>
       `
@@ -2814,7 +2875,53 @@ function classifyCategory(tx) {
         html || '<div class="label">当前范围内暂无记录。</div>';
     }
 
-    /* ========== 旅行行程管理 ========== */
+    function renderTxActions(tx) {
+      if (!tx || !tx.tx_id) return "";
+      const excludedActive =
+        Array.isArray(appState.excludedTxIds) &&
+        appState.excludedTxIds.includes(tx.tx_id);
+      const bigActive =
+        Array.isArray(appState.bigTxIds) &&
+        appState.bigTxIds.includes(tx.tx_id);
+      const excludeClass = excludedActive ? "tx-action-btn active" : "tx-action-btn";
+      const bigClass = bigActive ? "tx-action-btn active" : "tx-action-btn";
+      return `
+        <button class="${excludeClass}" onclick="toggleExcludeById('${tx.tx_id}')">排除分析</button>
+        <button class="${bigClass}" onclick="toggleBigById('${tx.tx_id}')">计入大额消费</button>
+      `;
+    }
+
+    function toggleExcludeById(txId) {
+      if (!txId) return;
+      let arr = Array.isArray(appState.excludedTxIds)
+        ? appState.excludedTxIds.slice()
+        : [];
+      if (arr.includes(txId)) {
+        arr = arr.filter((id) => id !== txId);
+      } else {
+        arr.push(txId);
+      }
+      appState.excludedTxIds = arr;
+      localStorage.setItem("ledger_excluded_tx", JSON.stringify(arr));
+      renderAll();
+    }
+
+    function toggleBigById(txId) {
+      if (!txId) return;
+      let arr = Array.isArray(appState.bigTxIds)
+        ? appState.bigTxIds.slice()
+        : [];
+      if (arr.includes(txId)) {
+        arr = arr.filter((id) => id !== txId);
+      } else {
+        arr.push(txId);
+      }
+      appState.bigTxIds = arr;
+      localStorage.setItem("ledger_big_tx", JSON.stringify(arr));
+      renderBigPurchases(filterBBase(getStatTransactions()));
+    }
+
+    /* ========== 旅游行程管理 ========== */
     function persistTravelStore() {
       localStorage.setItem(
         TRAVEL_STORAGE_KEY,
@@ -2925,7 +3032,7 @@ function classifyCategory(tx) {
         .slice()
         .sort((a, b) => (a.date === b.date ? (a.tx_id || "").localeCompare(b.tx_id || "") : b.date.localeCompare(a.date)));
       if (!txs.length) {
-        listEl.innerHTML = '<div class="label">暂无旅行账本交易。</div>';
+        listEl.innerHTML = '<div class="label">暂无旅游账本交易。</div>';
         return;
       }
       const rows = txs
