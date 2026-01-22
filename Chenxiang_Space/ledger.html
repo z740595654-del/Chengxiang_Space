@@ -769,7 +769,6 @@
           </select>
           <select id="inBook">
             <option value="主账">主账</option>
-            <option value="旅游">旅游</option>
           </select>
         </div>
         <div class="grid-2">
@@ -1605,6 +1604,7 @@
       appState.transactions = (data || []).map(normalizeTx);
 
       refreshBookBuckets();
+      refreshBookOptions();
       rebuildPeriodOptions();
       calculatePeriod();
       renderAll();
@@ -1636,6 +1636,39 @@
       appState.allNonMetaTxs = nonMeta;
       appState.mainTxs = nonMeta.filter((tx) => getBookName(tx) === "主账");
       appState.travelTxs = nonMeta.filter((tx) => getBookName(tx) === "旅游");
+    }
+
+    function refreshBookOptions() {
+      const select = document.getElementById("inBook");
+      if (!select) return;
+      const defaultBooks = ["主账", "旅游", "3D打印"];
+      const bookSet = new Set(defaultBooks);
+      appState.transactions.forEach((tx) => {
+        const book = tx && tx.book ? tx.book : "";
+        if (book) bookSet.add(book);
+      });
+      const seen = new Set();
+      const options = [];
+      defaultBooks.forEach((book) => {
+        if (!seen.has(book) && bookSet.has(book)) {
+          seen.add(book);
+          options.push(book);
+        }
+      });
+      bookSet.forEach((book) => {
+        if (!seen.has(book)) {
+          seen.add(book);
+          options.push(book);
+        }
+      });
+      select.innerHTML = "";
+      options.forEach((book) => {
+        const opt = document.createElement("option");
+        opt.value = book;
+        opt.textContent = book;
+        select.appendChild(opt);
+      });
+      select.value = "主账";
     }
 
     function rebuildPeriodOptions() {
@@ -1857,7 +1890,7 @@
       const statTxs = getStatTransactions();
       const periodTx = statTxs.filter(inCurrentPeriod);
       const bBase = filterBBase(periodTx); // 原始 B 口径（含大额）
-      const ledgerBBase = filterBBase(statTxs); // 全量账本 B 口径
+      const ledgerBBase = filterBBase(appState.allNonMetaTxs); // 全账本 B 口径
       const bData = bBase.filter((tx) => !isExcluded(tx)); // 真正参与预算的 B 口径
 
       appState.lastBScope = bData;
@@ -2357,7 +2390,7 @@ function classifyCategory(tx) {
       }
       appState.bigTxIds = arr;
       localStorage.setItem("ledger_big_tx", JSON.stringify(arr));
-      renderBigPurchases(filterBBase(getStatTransactions()));
+      renderBigPurchases(filterBBase(appState.allNonMetaTxs));
     }
 
     /* ========== CFO 总评 ========== */
@@ -2918,7 +2951,7 @@ function classifyCategory(tx) {
       }
       appState.bigTxIds = arr;
       localStorage.setItem("ledger_big_tx", JSON.stringify(arr));
-      renderBigPurchases(filterBBase(getStatTransactions()));
+      renderBigPurchases(filterBBase(appState.allNonMetaTxs));
     }
 
     /* ========== 旅游行程管理 ========== */
