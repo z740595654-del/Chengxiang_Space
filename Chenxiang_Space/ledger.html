@@ -676,15 +676,11 @@
             <div class="value" id="travelTotalSpend">¥0.00</div>
           </div>
           <div style="text-align: right">
-            <div class="label">日均</div>
-            <div class="value" id="travelDailyAvg">¥0.00</div>
+            <div class="label">平均每日消费</div>
+            <div class="label" id="travelDailyAvgSmall">¥0.00</div>
           </div>
         </div>
         <div class="label" id="travelSummaryHint" style="margin-top: 6px"></div>
-        <div class="travel-section">
-          <h4>按日</h4>
-          <div id="travelDailyChart" class="travel-chart"></div>
-        </div>
         <div class="travel-section">
           <h4>按类别</h4>
           <div id="travelBucketChart" class="travel-chart"></div>
@@ -2998,7 +2994,7 @@ function classifyCategory(tx) {
       const activeNameEl = document.getElementById("travelActiveName");
       const countEl = document.getElementById("travelSelectedCount");
       const totalEl = document.getElementById("travelTotalSpend");
-      const avgEl = document.getElementById("travelDailyAvg");
+      const avgEl = document.getElementById("travelDailyAvgSmall");
       const hintEl = document.getElementById("travelSummaryHint");
       const itineraries = appState.travel.store.itineraries || [];
       if (!listEl) return;
@@ -3058,14 +3054,7 @@ function classifyCategory(tx) {
         (sum, tx) => sum + Math.abs(Number(tx.amount) || 0),
         0
       );
-      const dateRange = buildTravelDateRange(expenseTxs);
-      const dailyMap = {};
-      expenseTxs.forEach((tx) => {
-        const amt = Math.abs(Number(tx.amount) || 0);
-        dailyMap[tx.date] = (dailyMap[tx.date] || 0) + amt;
-      });
-      const dailyValues = dateRange.map((d) => dailyMap[d] || 0);
-      const dayCount = Math.max(dateRange.length || 0, 1);
+      const dayCount = computeTravelDayCount(expenseTxs);
       const dailyAvg = totalSpend / dayCount;
 
       if (totalEl) totalEl.textContent = `¥${totalSpend.toFixed(2)}`;
@@ -3076,13 +3065,12 @@ function classifyCategory(tx) {
           : "暂无行程可分析。";
       }
 
-      renderTravelDailyChart(dateRange, dailyValues);
       renderTravelBucketChart(expenseTxs);
       renderTravelTopList(expenseTxs);
     }
 
-    function buildTravelDateRange(expenseTxs) {
-      if (!expenseTxs.length) return [];
+    function computeTravelDayCount(expenseTxs) {
+      if (!expenseTxs.length) return 1;
       let minDate = expenseTxs[0].date;
       let maxDate = expenseTxs[0].date;
       expenseTxs.forEach((tx) => {
@@ -3091,62 +3079,9 @@ function classifyCategory(tx) {
       });
       const start = parseDateStrict(minDate);
       const end = parseDateStrict(maxDate);
-      if (!start || !end) return [];
-      const dates = [];
-      const cursor = new Date(start);
-      while (cursor <= end) {
-        dates.push(formatDateLocal(cursor));
-        cursor.setDate(cursor.getDate() + 1);
-      }
-      return dates;
-    }
-
-    function renderTravelDailyChart(dates, values) {
-      const div = document.getElementById("travelDailyChart");
-      if (!div) return;
-      const theme = document.documentElement.getAttribute("data-theme") || "dark";
-      const textColor = theme === "light" ? "#64748b" : "#cbd5f5";
-      const gridColor = theme === "light" ? "#e2e8f0" : "rgba(148,163,184,0.2)";
-      if (!dates.length) {
-        Plotly.newPlot(
-          div,
-          [],
-          {
-            paper_bgcolor: "rgba(0,0,0,0)",
-            plot_bgcolor: "rgba(0,0,0,0)",
-            font: { color: textColor },
-            margin: { t: 10, l: 40, r: 10, b: 28 },
-            annotations: [
-              {
-                text: "暂无支出数据",
-                x: 0.5,
-                y: 0.5,
-                xref: "paper",
-                yref: "paper",
-                showarrow: false,
-              },
-            ],
-          },
-          { displayModeBar: false }
-        );
-        return;
-      }
-      const trace = {
-        type: "scatter",
-        x: dates,
-        y: values,
-        mode: "lines+markers",
-        line: { color: "#3b82f6" },
-      };
-      const layout = {
-        paper_bgcolor: "rgba(0,0,0,0)",
-        plot_bgcolor: "rgba(0,0,0,0)",
-        font: { color: textColor },
-        margin: { t: 10, l: 40, r: 10, b: 28 },
-        xaxis: { showgrid: false, tickangle: -30 },
-        yaxis: { showgrid: true, gridcolor: gridColor },
-      };
-      Plotly.newPlot(div, [trace], layout, { displayModeBar: false });
+      if (!start || !end) return 1;
+      const days = Math.round((end - start) / 86400000) + 1;
+      return Math.max(days, 1);
     }
 
     function renderTravelBucketChart(expenseTxs) {
