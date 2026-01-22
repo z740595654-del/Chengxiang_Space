@@ -315,6 +315,90 @@
       background: rgba(148, 163, 184, 0.15);
       color: var(--dim);
     }
+    .travel-section {
+      margin-top: 10px;
+    }
+    .travel-itinerary-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin: 8px 0;
+    }
+    .travel-itinerary-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--input-border);
+      background: rgba(59, 130, 246, 0.04);
+      cursor: pointer;
+    }
+    .travel-itinerary-item.active {
+      border-color: rgba(59, 130, 246, 0.7);
+      background: rgba(59, 130, 246, 0.12);
+    }
+    .travel-mini-btn {
+      background: var(--input-border);
+      color: var(--text);
+      padding: 4px 6px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      width: auto;
+    }
+    .travel-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.65);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+    }
+    .travel-modal-content {
+      width: min(860px, 92vw);
+      max-height: 82vh;
+      overflow: auto;
+      background: var(--panel);
+      border-radius: 12px;
+      border: var(--border);
+      padding: 12px;
+      box-shadow: var(--shadow);
+    }
+    .travel-modal-row {
+      border: 1px solid var(--input-border);
+      border-radius: 10px;
+      padding: 8px;
+      display: grid;
+      grid-template-columns: 24px 1fr;
+      gap: 8px;
+      align-items: start;
+      background: rgba(15, 23, 42, 0.2);
+    }
+    .travel-modal-meta {
+      font-size: 0.76rem;
+      color: var(--dim);
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 4px 10px;
+    }
+    .travel-chart {
+      width: 100%;
+      height: 220px;
+    }
+    .travel-top-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+    }
+    .travel-top-table th,
+    .travel-top-table td {
+      border-bottom: 1px solid var(--input-border);
+      padding: 6px 4px;
+      text-align: left;
+      vertical-align: top;
+    }
   </style>
 </head>
 <body>
@@ -560,6 +644,54 @@
       <div id="bigList" class="label" style="margin-top: 6px"></div>
     </div>
 
+    <!-- 旅行卡片 -->
+    <div class="card" id="travelCard">
+      <div class="row" style="align-items: center">
+        <h3>🧳 旅行</h3>
+        <span class="label" id="travelSelectedCount">已选 0 笔</span>
+      </div>
+      <div class="travel-section">
+        <div class="row">
+          <h4>行程管理</h4>
+          <span class="label" id="travelActiveName">未选择行程</span>
+        </div>
+        <div id="travelItineraryList" class="travel-itinerary-list"></div>
+        <div class="grid-2">
+          <button onclick="createTravelItinerary()">新建行程</button>
+          <button class="secondary" onclick="deleteTravelItinerary()">删除行程</button>
+        </div>
+      </div>
+      <div class="travel-section">
+        <div class="row" style="align-items: center">
+          <h4>交易选择</h4>
+          <button class="secondary" style="width: auto" onclick="openTravelModal()">
+            选择交易
+          </button>
+        </div>
+      </div>
+      <div class="travel-section">
+        <div class="grid-2">
+          <div>
+            <div class="label">总支出</div>
+            <div class="value" id="travelTotalSpend">¥0.00</div>
+          </div>
+          <div style="text-align: right">
+            <div class="label">平均每日消费</div>
+            <div class="label" id="travelDailyAvgSmall">¥0.00</div>
+          </div>
+        </div>
+        <div class="label" id="travelSummaryHint" style="margin-top: 6px"></div>
+        <div class="travel-section">
+          <h4>按类别</h4>
+          <div id="travelBucketChart" class="travel-chart"></div>
+        </div>
+        <div class="travel-section">
+          <h4>Top 10 支出</h4>
+          <div id="travelTopList" class="label"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- 数据舱（录入） -->
     <div class="card">
       <div class="tabs">
@@ -613,7 +745,10 @@
             <option value="余额">余额</option>
             <option value="信用卡">信用卡</option>
           </select>
-          <input type="text" id="inBook" placeholder="账本，如：主账" value="主账" />
+          <select id="inBook">
+            <option value="主账">主账</option>
+            <option value="旅行">旅行</option>
+          </select>
         </div>
         <div class="grid-2">
           <select id="inXiao">
@@ -682,6 +817,22 @@
     </div>
   </div>
 
+  <div id="travelModal" class="travel-modal">
+    <div class="travel-modal-content">
+      <div class="row" style="align-items: center">
+        <h3>选择旅行交易</h3>
+        <button class="secondary" style="width: auto" onclick="closeTravelModal()">
+          关闭
+        </button>
+      </div>
+      <div id="travelModalList" class="travel-section"></div>
+      <div class="grid-2">
+        <button onclick="saveTravelModal()">保存并关闭</button>
+        <button class="secondary" onclick="closeTravelModal()">取消</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const LEDGER_API_BASE = "https://czbpght.cn/ledger";
     const BALANCE_ANCHOR_ACCOUNT = "BALANCE_ANCHOR";
@@ -701,6 +852,8 @@
         daily_rate: 0.0005,
       },
     ];
+    const TRAVEL_STORAGE_KEY = "travel_itineraries_v1";
+    const TRAVEL_BUCKETS = ["住宿", "交通", "餐饮", "项目", "购物", "其他"];
 
     let appState = {
       settings: {
@@ -710,17 +863,26 @@
       scope: "current", // current | all | period:YYYY-MM-DD
       ledgerKey: "",
       transactions: [],
+      allNonMetaTxs: [],
+      mainTxs: [],
+      travelTxs: [],
       period: { start: "", end: "", days: 0 },
       today: formatDateLocal(new Date()),
       excludedTxIds: [], // 被剔除的大额消费 tx_id 列表
       periodChoices: [], // 数据中存在的所有账期
       lastBScope: [], // 最近一次用于图表的 B 口径数据
       burnView: "auto", // auto | toDate | full
+      travel: {
+        store: { version: 1, itineraries: [], txTagMap: {} },
+        activeId: null,
+        editingId: null,
+      },
     };
 
     window.onload = async () => {
       initTheme();
       initSettings();
+      initTravelStore();
       const dateInput = document.getElementById("inDate");
       if (dateInput) dateInput.value = appState.today;
       await loadTransactions();
@@ -747,6 +909,31 @@
         drawLedgerHeatmap(appState.lastBScope, theme === "light");
         drawBurnChart(appState.lastBScope, theme === "light");
       }
+      renderTravelCard();
+    }
+
+    function initTravelStore() {
+      let parsed = null;
+      const raw = localStorage.getItem(TRAVEL_STORAGE_KEY);
+      if (raw) {
+        try {
+          parsed = JSON.parse(raw);
+        } catch (e) {
+          parsed = null;
+        }
+      }
+      if (
+        !parsed ||
+        parsed.version !== 1 ||
+        !Array.isArray(parsed.itineraries) ||
+        typeof parsed.txTagMap !== "object" ||
+        parsed.txTagMap === null
+      ) {
+        parsed = { version: 1, itineraries: [], txTagMap: {} };
+      }
+      appState.travel.store = parsed;
+      appState.travel.activeId =
+        parsed.itineraries.length > 0 ? parsed.itineraries[0].id : null;
     }
 
     function updateBurnToggle(resolvedView, selectedView) {
@@ -865,7 +1052,6 @@
     function findLatestCardAnchor(txs, accountName) {
       const anchors = txs.filter((tx) => {
         if (tx.account !== accountName) return false;
-        if (tx.book !== "主账") return false;
         if (Number(tx.is_xiaoe) === 1) return false;
         const l1 = String(tx.category_level1 || "");
         const l2 = String(tx.category_level2 || "");
@@ -923,7 +1109,6 @@
     function buildCardData(card) {
       const txs = appState.transactions.filter((tx) => {
         if (tx.account !== card.name) return false;
-        if (tx.book !== "主账") return false;
         return Number(tx.is_xiaoe) !== 1;
       });
       const anchor = findLatestCardAnchor(txs, card.name);
@@ -1379,6 +1564,7 @@
       const data = await apiGet("/transactions", {});
       appState.transactions = (data || []).map(normalizeTx);
 
+      refreshBookBuckets();
       rebuildPeriodOptions();
       calculatePeriod();
       renderAll();
@@ -1397,6 +1583,17 @@
         book: t.book || "",
         is_xiaoe: Number(t.is_xiaoe) === 1,
       };
+    }
+
+    function getBookName(tx) {
+      return tx && tx.book ? tx.book : "主账";
+    }
+
+    function refreshBookBuckets() {
+      const nonMeta = appState.transactions.filter((tx) => !isMetaTx(tx));
+      appState.allNonMetaTxs = nonMeta;
+      appState.mainTxs = nonMeta.filter((tx) => getBookName(tx) === "主账");
+      appState.travelTxs = nonMeta.filter((tx) => getBookName(tx) === "旅行");
     }
 
     function rebuildPeriodOptions() {
@@ -1556,7 +1753,7 @@
     }
 
     function getStatTransactions() {
-      return appState.transactions.filter((tx) => !isMetaTx(tx));
+      return Array.isArray(appState.mainTxs) ? appState.mainTxs : [];
     }
 
     function filterBBase(list) {
@@ -1806,6 +2003,7 @@
       });
 
       renderList(sortedList);
+      renderTravelCard();
     }
 
     /* ========== 分类逻辑：车 / 娱乐 / 缴费 / 饮食 / 饮料 / 其他 ========== */
@@ -2614,6 +2812,376 @@ function classifyCategory(tx) {
         .join("");
       document.getElementById("txList").innerHTML =
         html || '<div class="label">当前范围内暂无记录。</div>';
+    }
+
+    /* ========== 旅行行程管理 ========== */
+    function persistTravelStore() {
+      localStorage.setItem(
+        TRAVEL_STORAGE_KEY,
+        JSON.stringify(appState.travel.store)
+      );
+    }
+
+    function getActiveTravelItinerary() {
+      const itineraries = appState.travel.store.itineraries || [];
+      return (
+        itineraries.find((it) => it.id === appState.travel.activeId) || null
+      );
+    }
+
+    function createTravelItinerary() {
+      const now = new Date().toISOString();
+      const itineraries = appState.travel.store.itineraries;
+      const id = `t_${Date.now()}`;
+      const name = `行程 ${itineraries.length + 1}`;
+      itineraries.push({
+        id,
+        name,
+        txIds: [],
+        createdAt: now,
+        updatedAt: now,
+      });
+      appState.travel.activeId = id;
+      appState.travel.editingId = id;
+      persistTravelStore();
+      renderTravelCard();
+    }
+
+    function deleteTravelItinerary() {
+      const active = getActiveTravelItinerary();
+      if (!active) {
+        alert("请先选择行程");
+        return;
+      }
+      if (!confirm(`确定删除行程「${active.name}」吗？`)) return;
+      const list = appState.travel.store.itineraries;
+      appState.travel.store.itineraries = list.filter(
+        (it) => it.id !== active.id
+      );
+      appState.travel.activeId =
+        appState.travel.store.itineraries[0]?.id || null;
+      appState.travel.editingId = null;
+      persistTravelStore();
+      renderTravelCard();
+    }
+
+    function setTravelActive(id) {
+      appState.travel.activeId = id;
+      appState.travel.editingId = null;
+      renderTravelCard();
+    }
+
+    function startTravelEdit(id) {
+      appState.travel.editingId = id;
+      renderTravelCard();
+    }
+
+    function cancelTravelEdit() {
+      appState.travel.editingId = null;
+      renderTravelCard();
+    }
+
+    function saveTravelEdit(id) {
+      const input = document.getElementById(`travelEditInput-${id}`);
+      const nextName = input ? input.value.trim() : "";
+      const itinerary = appState.travel.store.itineraries.find(
+        (it) => it.id === id
+      );
+      if (!itinerary) return;
+      itinerary.name = nextName || itinerary.name || "未命名行程";
+      itinerary.updatedAt = new Date().toISOString();
+      appState.travel.editingId = null;
+      persistTravelStore();
+      renderTravelCard();
+    }
+
+    function openTravelModal() {
+      const active = getActiveTravelItinerary();
+      if (!active) {
+        alert("请先新建并选择行程");
+        return;
+      }
+      renderTravelModal();
+      const modal = document.getElementById("travelModal");
+      if (modal) modal.style.display = "flex";
+    }
+
+    function closeTravelModal() {
+      const modal = document.getElementById("travelModal");
+      if (modal) modal.style.display = "none";
+    }
+
+    function renderTravelModal() {
+      const listEl = document.getElementById("travelModalList");
+      if (!listEl) return;
+      const active = getActiveTravelItinerary();
+      if (!active) {
+        listEl.innerHTML = '<div class="label">暂无行程。</div>';
+        return;
+      }
+      const selected = new Set(active.txIds || []);
+      const txs = appState.travelTxs
+        .filter((tx) => tx.tx_id)
+        .slice()
+        .sort((a, b) => (a.date === b.date ? (a.tx_id || "").localeCompare(b.tx_id || "") : b.date.localeCompare(a.date)));
+      if (!txs.length) {
+        listEl.innerHTML = '<div class="label">暂无旅行账本交易。</div>';
+        return;
+      }
+      const rows = txs
+        .map((tx) => {
+          const txId = tx.tx_id;
+          const tag = appState.travel.store.txTagMap[txId] || {};
+          const bucket = TRAVEL_BUCKETS.includes(tag.bucket)
+            ? tag.bucket
+            : "其他";
+          const checked = selected.has(txId) ? "checked" : "";
+          const amt = Math.abs(Number(tx.amount) || 0);
+          const desc = tx.description || "-";
+          return `
+            <div class="travel-modal-row">
+              <input type="checkbox" class="travel-tx-check" data-tx-id="${txId}" ${checked} />
+              <div>
+                <div class="row" style="align-items:center; gap:8px;">
+                  <div style="font-weight:600;">${tx.date} · ¥${amt.toFixed(
+            2
+          )}</div>
+                  <select class="travel-tx-bucket" data-tx-id="${txId}" style="width:auto; margin-bottom:0;">
+                    ${TRAVEL_BUCKETS.map(
+                      (b) =>
+                        `<option value="${b}" ${
+                          b === bucket ? "selected" : ""
+                        }>${b}</option>`
+                    ).join("")}
+                  </select>
+                </div>
+                <div class="label">用途/描述：${desc}</div>
+                <div class="travel-modal-meta">
+                  <div>账户：${tx.account || "-"}</div>
+                  <div>tx_id：${txId}</div>
+                </div>
+              </div>
+            </div>`;
+        })
+        .join("");
+      listEl.innerHTML = rows;
+    }
+
+    function saveTravelModal() {
+      const active = getActiveTravelItinerary();
+      if (!active) return;
+      const checks = document.querySelectorAll(".travel-tx-check");
+      const newTxIds = [];
+      checks.forEach((chk) => {
+        const txId = chk.dataset.txId;
+        const bucketEl = document.querySelector(
+          `.travel-tx-bucket[data-tx-id="${txId}"]`
+        );
+        let bucket = bucketEl ? bucketEl.value : "其他";
+        if (!TRAVEL_BUCKETS.includes(bucket)) bucket = "其他";
+        appState.travel.store.txTagMap[txId] = { bucket };
+        if (chk.checked) newTxIds.push(txId);
+      });
+      active.txIds = newTxIds;
+      active.updatedAt = new Date().toISOString();
+      persistTravelStore();
+      closeTravelModal();
+      renderTravelCard();
+    }
+
+    function renderTravelCard() {
+      const listEl = document.getElementById("travelItineraryList");
+      const activeNameEl = document.getElementById("travelActiveName");
+      const countEl = document.getElementById("travelSelectedCount");
+      const totalEl = document.getElementById("travelTotalSpend");
+      const avgEl = document.getElementById("travelDailyAvgSmall");
+      const hintEl = document.getElementById("travelSummaryHint");
+      const itineraries = appState.travel.store.itineraries || [];
+      if (!listEl) return;
+
+      if (!appState.travel.activeId && itineraries.length) {
+        appState.travel.activeId = itineraries[0].id;
+      }
+
+      if (!itineraries.length) {
+        listEl.innerHTML = '<div class="label">暂无行程，请新建。</div>';
+      } else {
+        listEl.innerHTML = itineraries
+          .map((it) => {
+            const isActive = it.id === appState.travel.activeId;
+            if (appState.travel.editingId === it.id) {
+              return `
+                <div class="travel-itinerary-item ${isActive ? "active" : ""}">
+                  <input id="travelEditInput-${it.id}" value="${it.name || ""}" />
+                  <div style="display:flex; gap:6px;">
+                    <button class="travel-mini-btn" onclick="saveTravelEdit('${it.id}')">保存</button>
+                    <button class="travel-mini-btn" onclick="cancelTravelEdit()">取消</button>
+                  </div>
+                </div>
+              `;
+            }
+            return `
+              <div class="travel-itinerary-item ${isActive ? "active" : ""}" onclick="setTravelActive('${it.id}')">
+                <span>${it.name || "未命名行程"}</span>
+                <button class="travel-mini-btn" onclick="event.stopPropagation(); startTravelEdit('${it.id}')">编辑</button>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      const active = getActiveTravelItinerary();
+      if (activeNameEl) {
+        activeNameEl.textContent = active ? `当前：${active.name}` : "未选择行程";
+      }
+
+      const travelMap = new Map(
+        appState.travelTxs.map((tx) => [tx.tx_id, tx])
+      );
+      const selectedTxs = active
+        ? (active.txIds || [])
+            .map((id) => travelMap.get(id))
+            .filter(Boolean)
+        : [];
+      if (countEl) {
+        countEl.textContent = `已选 ${selectedTxs.length} 笔`;
+      }
+
+      const expenseTxs = selectedTxs.filter(
+        (tx) => tx.category_level1 !== "收入"
+      );
+      const totalSpend = expenseTxs.reduce(
+        (sum, tx) => sum + Math.abs(Number(tx.amount) || 0),
+        0
+      );
+      const dayCount = computeTravelDayCount(expenseTxs);
+      const dailyAvg = totalSpend / dayCount;
+
+      if (totalEl) totalEl.textContent = `¥${totalSpend.toFixed(2)}`;
+      if (avgEl) avgEl.textContent = `¥${dailyAvg.toFixed(2)}`;
+      if (hintEl) {
+        hintEl.textContent = active
+          ? `当前行程包含 ${selectedTxs.length} 笔交易（仅统计支出）。`
+          : "暂无行程可分析。";
+      }
+
+      renderTravelBucketChart(expenseTxs);
+      renderTravelTopList(expenseTxs);
+    }
+
+    function computeTravelDayCount(expenseTxs) {
+      if (!expenseTxs.length) return 1;
+      let minDate = expenseTxs[0].date;
+      let maxDate = expenseTxs[0].date;
+      expenseTxs.forEach((tx) => {
+        if (tx.date < minDate) minDate = tx.date;
+        if (tx.date > maxDate) maxDate = tx.date;
+      });
+      const start = parseDateStrict(minDate);
+      const end = parseDateStrict(maxDate);
+      if (!start || !end) return 1;
+      const days = Math.round((end - start) / 86400000) + 1;
+      return Math.max(days, 1);
+    }
+
+    function renderTravelBucketChart(expenseTxs) {
+      const div = document.getElementById("travelBucketChart");
+      if (!div) return;
+      const theme = document.documentElement.getAttribute("data-theme") || "dark";
+      const textColor = theme === "light" ? "#64748b" : "#cbd5f5";
+      const buckets = {};
+      TRAVEL_BUCKETS.forEach((b) => {
+        buckets[b] = 0;
+      });
+      expenseTxs.forEach((tx) => {
+        const txId = tx.tx_id;
+        const tag = appState.travel.store.txTagMap[txId] || {};
+        const bucket = TRAVEL_BUCKETS.includes(tag.bucket)
+          ? tag.bucket
+          : "其他";
+        buckets[bucket] += Math.abs(Number(tx.amount) || 0);
+      });
+      const x = TRAVEL_BUCKETS.slice();
+      const y = x.map((b) => buckets[b] || 0);
+      const hasData = y.some((v) => v > 0);
+      const layout = {
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor: "rgba(0,0,0,0)",
+        font: { color: textColor },
+        margin: { t: 10, l: 40, r: 10, b: 28 },
+        xaxis: { showgrid: false },
+        yaxis: { showgrid: true, gridcolor: "rgba(148,163,184,0.2)" },
+        annotations: hasData
+          ? []
+          : [
+              {
+                text: "暂无支出数据",
+                x: 0.5,
+                y: 0.5,
+                xref: "paper",
+                yref: "paper",
+                showarrow: false,
+              },
+            ],
+      };
+      const trace = {
+        type: "bar",
+        x,
+        y,
+        marker: { color: "#22c55e" },
+      };
+      Plotly.newPlot(div, [trace], layout, { displayModeBar: false });
+    }
+
+    function renderTravelTopList(expenseTxs) {
+      const listEl = document.getElementById("travelTopList");
+      if (!listEl) return;
+      if (!expenseTxs.length) {
+        listEl.innerHTML = '<div class="label">暂无支出交易。</div>';
+        return;
+      }
+      const top = expenseTxs
+        .slice()
+        .sort(
+          (a, b) =>
+            Math.abs(Number(b.amount) || 0) - Math.abs(Number(a.amount) || 0)
+        )
+        .slice(0, 10);
+      const rows = top
+        .map((tx) => {
+          const txId = tx.tx_id;
+          const tag = appState.travel.store.txTagMap[txId] || {};
+          const bucket = TRAVEL_BUCKETS.includes(tag.bucket)
+            ? tag.bucket
+            : "其他";
+          const amt = Math.abs(Number(tx.amount) || 0);
+          return `
+            <tr>
+              <td>${tx.date}</td>
+              <td>¥${amt.toFixed(2)}</td>
+              <td>${bucket}</td>
+              <td>${tx.description || "-"}</td>
+              <td>${tx.account || "-"}</td>
+              <td>${txId}</td>
+            </tr>
+          `;
+        })
+        .join("");
+      listEl.innerHTML = `
+        <table class="travel-top-table">
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>金额</th>
+              <th>桶</th>
+              <th>用途/描述</th>
+              <th>账户</th>
+              <th>tx_id</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
     }
 
     /* ========== 单笔记账 / 批量导入 / 导出 ========== */
